@@ -100,7 +100,7 @@ export default function Settings() {
   const pad = "0 20px";
 
   return (
-    <div style={{ paddingBottom: 120, maxWidth: 480, margin: "0 auto" }}>
+    <div style={{ paddingBottom: 40, maxWidth: 480, margin: "0 auto" }}>
 
       {/* 프로필 */}
       <div style={{ padding: "32px 20px 24px", textAlign: "center" }}>

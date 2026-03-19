@@ -5,6 +5,7 @@ import ChartDetail from "./pages/ChartDetail";
 import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
 import SplashScreen from "./components/SplashScreen";
+import { useAlertCount } from "./hooks/useAlertCount";
 
 function useBreakpoint() {
   const get = () => window.innerWidth < 768 ? "mobile" : window.innerWidth < 1100 ? "tablet" : "pc";
@@ -47,6 +48,7 @@ const NAV = [
 function MobileHeader() {
   const navigate = useNavigate();
   const location = useLocation();
+  const alertCount = useAlertCount();
 
   if (location.pathname.startsWith("/chart/")) return null;
 
@@ -59,7 +61,7 @@ function MobileHeader() {
       height: 52, padding: "0 20px",
       display: "flex", alignItems: "center", justifyContent: "space-between",
     }}>
-      <div style={{ display: "flex", alignItems: "center" }}>
+      <div onClick={() => navigate("/")} style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
         <img src="/logo.png" alt="logo" style={{ width: 30, height: 30, borderRadius: 8 }} />
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -68,8 +70,20 @@ function MobileHeader() {
           <Icon d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" size={20} />
         </button>
         {/* 알림 */}
-        <button onClick={() => navigate("/alerts")} style={{ border: "none", background: "none", cursor: "pointer", padding: 6, lineHeight: 0, color: "var(--color-text-tertiary)" }}>
+        <button onClick={() => navigate("/alerts")} style={{ border: "none", background: "none", cursor: "pointer", padding: 6, lineHeight: 0, color: "var(--color-text-tertiary)", position: "relative" }}>
           <Icon d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" size={20} />
+          {alertCount > 0 && (
+            <span style={{
+              position: "absolute", top: 2, right: 2,
+              minWidth: 14, height: 14, borderRadius: 7,
+              background: "var(--color-text-danger)", color: "#fff",
+              fontSize: 9, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "0 3px",
+            }}>
+              {alertCount > 99 ? "99+" : alertCount}
+            </span>
+          )}
         </button>
         {/* 마이페이지 */}
         <button onClick={() => navigate("/settings")} style={{ border: "none", background: "none", cursor: "pointer", padding: 6, lineHeight: 0, color: "var(--color-text-tertiary)" }}>
@@ -197,7 +211,6 @@ function AppLayout() {
           <Route path="/settings"    element={<Settings />} />
         </Routes>
       </div>
-      {isMobile && <BottomNav />}
     </div>
   );
 }

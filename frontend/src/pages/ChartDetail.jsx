@@ -402,7 +402,7 @@ export default function ChartDetail() {
   // ── 렌더링 ─────────────────────────────────
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--color-background-secondary)", paddingBottom: isMobile ? 72 : 0 }}>
+    <div style={{ minHeight: "100vh", background: "var(--color-background-secondary)", paddingBottom: isMobile ? 20 : 0 }}>
 
       {/* 헤더 — 모바일 전용 (PC는 TopNav 사용) */}
       <header style={{

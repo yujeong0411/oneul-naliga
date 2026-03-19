@@ -1,4 +1,5 @@
-const BASE = "/api";
+const API_URL = import.meta.env.VITE_API_URL || "";
+const BASE = `${API_URL}/api`;
 
 export const getAlerts = (stockCode, limit = 50) => {
   const params = new URLSearchParams({ limit });
