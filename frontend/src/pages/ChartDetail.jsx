@@ -190,11 +190,20 @@ export default function ChartDetail() {
   useEffect(() => {
     if (!chartInstance.current || !candleSeries.current) return;
     const chart = chartInstance.current;
-    const cs    = candleSeries.current;
 
+    // 기존 추세선 제거
     Object.values(trendSeriesMap.current).forEach((s) => { try { chart.removeSeries(s); } catch {} });
     trendSeriesMap.current = {};
+
+    // 캔들 시리즈 교체 (수평선 확실히 초기화)
+    try { chart.removeSeries(candleSeries.current); } catch {}
+    const cs = chart.addCandlestickSeries({
+      upColor: "#3a9e62", downColor: "#c05858",
+      borderUpColor: "#3a9e62", borderDownColor: "#c05858",
+      wickUpColor: "#3a9e62", wickDownColor: "#c05858",
+    });
     cs.setData(candles);
+    candleSeries.current = cs;
 
     lines.forEach((line) => {
       const color = lineColor(line.signal_type);
@@ -367,7 +376,7 @@ export default function ChartDetail() {
                   {line.timeframe}
                 </span>
                 <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: line.signal_type === "loss" ? "var(--color-background-danger)" : "var(--color-background-success)", color }}>
-                  {line.signal_type === "loss" ? "로스" : "공격"}
+                  {line.signal_type === "loss" ? "지지선" : "저항선"}
                 </span>
                 {target && (
                   <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
@@ -593,9 +602,37 @@ export default function ChartDetail() {
       {/* 모바일: 단일 컬럼 */}
       {isMobile && (
         <>
-          {/* 차트 */}
-          <div style={{ background: "var(--color-background-primary)", borderBottom: B }}>
+          {/* 차트 + 플로팅 선 긋기 버튼 */}
+          <div style={{ background: "var(--color-background-primary)", borderBottom: B, position: "relative" }}>
             <div ref={chartRef} style={{ width: "100%" }} />
+            {/* 플로팅 버튼 */}
+            <button
+              onClick={() => { setDrawMode(!drawMode); setDrawPoints([]); }}
+              style={{
+                position: "absolute", bottom: 12, right: 12, zIndex: 10,
+                width: 40, height: 40, borderRadius: "50%",
+                border: "none", cursor: "pointer",
+                background: drawMode ? "var(--color-text-primary)" : "rgba(255,255,255,0.9)",
+                color: drawMode ? "#fff" : "var(--color-text-secondary)",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </button>
+            {/* 안내 텍스트 */}
+            {drawMode && (
+              <div style={{
+                position: "absolute", bottom: 12, left: 12, right: 60, zIndex: 10,
+                background: "rgba(0,0,0,0.7)", borderRadius: 8,
+                padding: "6px 10px", fontSize: 11, color: "#fff", fontWeight: 500,
+              }}>
+                {drawPoints.length === 0 ? "① 첫 번째 점을 터치하세요" : "② 두 번째 점을 터치하세요"}
+              </div>
+            )}
           </div>
 
           {/* 모바일 패널 탭 */}

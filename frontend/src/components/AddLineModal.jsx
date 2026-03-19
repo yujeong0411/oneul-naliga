@@ -11,7 +11,7 @@ export default function AddLineModal({
   preselectedType = null,   // "trend" | "horizontal" | null
   defaultTimeframe = "일봉",
 }) {
-  const [tab, setTab] = useState(preselectedType || "trend");
+  const [tab, setTab] = useState(preselectedType || "horizontal");
   const [lineName, setLineName] = useState("");
   const [signalType, setSignalType] = useState("loss");
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
@@ -50,50 +50,20 @@ export default function AddLineModal({
 
         {/* 헤더 */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 12px", borderBottom: B }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>선 추가</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>{preselectedType === "trend" ? "추세선 저장" : "수평선 추가"}</span>
           <span onClick={onClose} style={{ fontSize: 20, color: "var(--color-text-tertiary)", cursor: "pointer", lineHeight: 1 }}>×</span>
         </div>
 
         <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* 선 종류 탭 */}
-          {!preselectedType && (
-            <div>
-              <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>선 종류</label>
-              <div style={{ display: "flex", border: B, borderRadius: 10, overflow: "hidden" }}>
-                {[
-                  { key: "trend", label: "추세선" },
-                  { key: "horizontal", label: "수평선" },
-                ].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => setTab(key)}
-                    style={{
-                      flex: 1, padding: "10px 0", fontSize: 14, fontWeight: tab === key ? 600 : 400,
-                      background: tab === key ? "var(--color-text-primary)" : "transparent",
-                      color: tab === key ? "white" : "var(--color-text-secondary)",
-                      border: "none", cursor: "pointer",
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 추세선 안내 */}
-          {tab === "trend" && (
+          {/* 추세선 안내 (차트에서 두 점 선택 후 열린 경우) */}
+          {preselectedType === "trend" && (
             <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 14px" }}>
-              {preselectedType ? (
-                <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-success)", fontWeight: 500 }}>✓ 두 점이 선택됐습니다. 선 정보를 입력하세요.</p>
-              ) : (
-                <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-secondary)" }}>차트에서 두 고점을 클릭하거나, 고점 탐지 탭에서 선택하세요.</p>
-              )}
+              <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-success)", fontWeight: 500 }}>두 점이 선택됐습니다. 선 정보를 입력하세요.</p>
             </div>
           )}
 
-          {/* 수평선 가격 */}
+          {/* 수평선 가격 (수동 추가 시) */}
           {tab === "horizontal" && (
             <div>
               <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>지지 / 저항 가격</label>
@@ -111,35 +81,13 @@ export default function AddLineModal({
             </div>
           )}
 
-          {/* 봉 종류 */}
-          <div>
-            <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>봉 종류</label>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {TIMEFRAMES.map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  style={{
-                    padding: "7px 14px", fontSize: 13, borderRadius: 20, border: B,
-                    fontWeight: timeframe === tf ? 600 : 400,
-                    background: timeframe === tf ? "var(--color-text-primary)" : "transparent",
-                    color: timeframe === tf ? "white" : "var(--color-text-secondary)",
-                    cursor: "pointer",
-                  }}
-                >
-                  {tf}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* 신호 종류 */}
           <div>
-            <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>신호 종류</label>
+            <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>선 종류</label>
             <div style={{ display: "flex", gap: 8 }}>
               {[
-                { key: "loss", label: "로스 지점", activeBorder: "var(--color-border-danger)", activeBg: "var(--color-background-danger)", activeColor: "var(--color-text-danger)" },
-                { key: "attack", label: "공격 지점", activeBorder: "var(--color-border-success)", activeBg: "var(--color-background-success)", activeColor: "var(--color-text-success)" },
+                { key: "loss", label: "지지선", activeBorder: "var(--color-border-danger)", activeBg: "var(--color-background-danger)", activeColor: "var(--color-text-danger)" },
+                { key: "attack", label: "저항선", activeBorder: "var(--color-border-success)", activeBg: "var(--color-background-success)", activeColor: "var(--color-text-success)" },
               ].map(({ key, label, activeBorder, activeBg, activeColor }) => (
                 <label key={key} style={{
                   flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "11px 12px",

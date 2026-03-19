@@ -73,8 +73,8 @@ export default function Alerts() {
         <div style={{ display: "flex", gap: 6 }}>
           {[
             { key: "all", label: "전체" },
-            { key: "attack", label: "공격" },
-            { key: "loss", label: "로스" },
+            { key: "attack", label: "저항선" },
+            { key: "loss", label: "지지선" },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -170,7 +170,7 @@ export default function Alerts() {
                             background: isAttack ? "var(--color-background-success)" : "var(--color-background-danger)",
                             color: isAttack ? "var(--color-text-success)" : "var(--color-text-danger)",
                           }}>
-                            {isAttack ? "공격" : "로스"}
+                            {isAttack ? "저항선" : "지지선"}
                           </span>
                         </div>
 

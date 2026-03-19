@@ -41,7 +41,7 @@ export default function SplashScreen({ onComplete }) {
           color: "var(--color-text-tertiary)",
           fontWeight: 400,
         }}>
-          주식 선 알림 서비스
+          오늘 하루도 건승하세요!
         </p>
       </div>
     </div>

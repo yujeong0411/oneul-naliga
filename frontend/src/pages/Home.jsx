@@ -343,7 +343,7 @@ export default function Home() {
         .map((l) => ({ ...l, dist: ((price - l.price) / l.price) * 100 }));
       if (withDist.length > 0) {
         const closest = withDist.reduce((a, b) => Math.abs(a.dist) < Math.abs(b.dist) ? a : b);
-        nearest = { type: closest.signal_type === "loss" ? "로스" : "공격", dist: Number(closest.dist.toFixed(2)) };
+        nearest = { type: closest.signal_type === "loss" ? "지지선" : "저항선", dist: Number(closest.dist.toFixed(2)) };
       }
     }
 

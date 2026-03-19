@@ -11,7 +11,7 @@ async def send_alert(line: dict, current_price: float, target_price: float, diff
         target_price: 선 위의 목표가 (수평선은 price, 추세선은 계산값)
         diff_pct: 거리 (%)
     """
-    signal_label = "공격 지점" if line.get("signal_type") == "attack" else "로스 지점"
+    signal_label = "저항선" if line.get("signal_type") == "attack" else "지지선"
     icon = "📈" if line.get("signal_type") == "attack" else "📉"
 
     stock_code = line["stock_code"]
