@@ -12,7 +12,7 @@ from app.services.kiwoom_ws import stream_prices, stream_orderbook
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 두 감시 태스크 동시 실행
+    # 백그라운드 태스크
     t1 = asyncio.create_task(realtime_monitor())  # 분봉용 WebSocket
     t2 = asyncio.create_task(daily_monitor())     # 일봉/주봉/월봉용 (장 마감 후 1회)
 

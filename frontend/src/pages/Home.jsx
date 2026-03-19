@@ -16,12 +16,6 @@ import { getWatchlist, addStock, removeStock, getPrice, detectMarket, searchStoc
 import { MARKET_ITEMS, loadMarketSettings, saveMarketSettings } from "../config/marketItems";
 import { getLines } from "../api/lines";
 
-// 미국 지수는 실제 API 미연결 → mock
-const MOCK_US = {
-  SP500:  { value: 5432.10,  change_pct: "+0.21" },
-  NASDAQ: { value: 17234.50, change_pct: "+0.35" },
-  DOW:    { value: 43521.30, change_pct: "-0.08" },
-};
 const RANKING_TABS = [
   { type: "view",        label: "조회" },
   { type: "volume",      label: "거래량" },
@@ -291,7 +285,7 @@ export default function Home() {
   const [stockMeta,   setStockMeta]   = useState({});
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [loadingList,  setLoadingList]  = useState(true);
-  const [marketData,     setMarketData]     = useState(MOCK_US);
+  const [marketData,     setMarketData]     = useState({});
   const [marketSettings, setMarketSettings] = useState(loadMarketSettings);
   const [showMarketEdit, setShowMarketEdit] = useState(false);
   const watchlistCodes = useMemo(() => watchlist.map((s) => s.code), [watchlist]);
@@ -303,13 +297,13 @@ export default function Home() {
       getIndices().catch(() => []),
       getFX().catch(() => []),
     ]).then(([indicesData, fxData]) => {
-      const merged = { ...MOCK_US };
+      const merged = {};
       indicesData.forEach((idx) => {
         merged[idx.name] = { value: idx.value, change_pct: idx.change_pct };
       });
       fxData.forEach((item) => {
         const currency = item.pair.split("/")[0];
-        merged[currency] = { value: item.value, unit: item.unit };
+        merged[currency] = { value: item.value, unit: item.unit, change_pct: item.change_pct || null };
       });
       setMarketData(merged);
     });

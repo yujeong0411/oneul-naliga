@@ -6,6 +6,7 @@ import httpx
 from app.services import kiwoom, kis
 from app.services.peak_detector import find_peaks, find_valleys
 from app.database import get_supabase
+from app.config import settings
 from app.data.stock_list import search_stocks
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
@@ -18,7 +19,8 @@ router = APIRouter(prefix="/stocks", tags=["stocks"])
 @router.get("/search")
 async def search(q: str = Query(default="", min_length=1)):
     """종목 이름 또는 코드로 검색"""
-    return search_stocks(q, limit=10)
+    has_kis = bool(settings.kis_app_key and settings.kis_app_secret)
+    return search_stocks(q, limit=10, include_us=has_kis)
 
 
 # ─────────────────────────────────────────
@@ -36,23 +38,48 @@ async def get_ranking(type: str = Query(default="view")):
 
 @router.get("/indices")
 async def get_indices():
-    """KOSPI / KOSDAQ 지수 조회"""
+    """KOSPI / KOSDAQ + 미국 지수 조회"""
+    results = []
+    # 국내 지수
     try:
-        return await kiwoom.get_indices()
+        kr = await kiwoom.get_indices()
+        results.extend(kr)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        print(f"[indices] 국내 지수 조회 실패: {e}")
+
+    # 미국 지수 (KIS 키가 있을 때만)
+    if settings.kis_app_key and settings.kis_app_secret:
+        try:
+            us = await kis.get_us_indices()
+            results.extend(us)
+        except Exception as e:
+            print(f"[indices] 미국 지수 조회 실패: {e}")
+
+    return results
 
 
 _fx_cache: dict = {"data": None, "expires_at": 0.0}
 
 @router.get("/fx")
 async def get_fx():
-    """주요 환율 조회 (USD/KRW, EUR/KRW, JPY/KRW, CNY/KRW) — 1시간 캐시"""
+    """주요 환율 조회 — KIS API 우선, 실패 시 open.er-api.com fallback (1시간 캐시)"""
     import time
     now = time.time()
     if _fx_cache["data"] and now < _fx_cache["expires_at"]:
         return _fx_cache["data"]
 
+    # KIS API 우선
+    if settings.kis_app_key and settings.kis_app_secret:
+        try:
+            result = await kis.get_fx_rates()
+            if result:
+                _fx_cache["data"] = result
+                _fx_cache["expires_at"] = now + 600  # 10분 캐시 (실시간에 가깝게)
+                return result
+        except Exception as e:
+            print(f"[fx] KIS 환율 조회 실패: {e}")
+
+    # Fallback: open.er-api.com
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get("https://open.er-api.com/v6/latest/USD")
@@ -65,7 +92,7 @@ async def get_fx():
         pairs = [
             ("USD/KRW", "USD",  1),
             ("EUR/KRW", "EUR",  1),
-            ("JPY/KRW", "JPY", 100),   # 한국 관행: 100엔 기준
+            ("JPY/KRW", "JPY", 100),
             ("CNY/KRW", "CNY",  1),
             ("GBP/KRW", "GBP",  1),
         ]
@@ -77,11 +104,11 @@ async def get_fx():
             result.append({"pair": pair_name, "value": round(value, 2), "unit": unit})
 
         _fx_cache["data"] = result
-        _fx_cache["expires_at"] = now + 3600  # 1시간
+        _fx_cache["expires_at"] = now + 3600
         return result
     except Exception as e:
         if _fx_cache["data"]:
-            return _fx_cache["data"]  # 실패 시 이전 캐시 반환
+            return _fx_cache["data"]
         raise HTTPException(status_code=502, detail=str(e))
 
 

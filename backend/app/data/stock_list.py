@@ -1,129 +1,73 @@
-# 종목 검색용 정적 데이터 (KOSPI / KOSDAQ / US 주요 종목)
-# 추후 Kiwoom 마스터 파일로 교체 가능
+"""
+종목 검색 — Supabase stock_list 테이블 기반
+- 국내: KOSPI/KOSDAQ 2,700+ 종목
+- 해외: NASDAQ 7,000+ 종목 (주요 종목 한글명 포함)
+"""
 
-STOCKS = [
-    # ── KOSPI ──
-    {"code": "005930", "name": "삼성전자",      "market": "국내"},
-    {"code": "000660", "name": "SK하이닉스",    "market": "국내"},
-    {"code": "005380", "name": "현대차",        "market": "국내"},
-    {"code": "005490", "name": "POSCO홀딩스",   "market": "국내"},
-    {"code": "035420", "name": "NAVER",         "market": "국내"},
-    {"code": "000270", "name": "기아",          "market": "국내"},
-    {"code": "068270", "name": "셀트리온",      "market": "국내"},
-    {"code": "105560", "name": "KB금융",        "market": "국내"},
-    {"code": "055550", "name": "신한지주",      "market": "국내"},
-    {"code": "003550", "name": "LG",            "market": "국내"},
-    {"code": "051910", "name": "LG화학",        "market": "국내"},
-    {"code": "006400", "name": "삼성SDI",       "market": "국내"},
-    {"code": "028260", "name": "삼성물산",      "market": "국내"},
-    {"code": "066570", "name": "LG전자",        "market": "국내"},
-    {"code": "032830", "name": "삼성생명",      "market": "국내"},
-    {"code": "011200", "name": "HMM",           "market": "국내"},
-    {"code": "096770", "name": "SK이노베이션",  "market": "국내"},
-    {"code": "017670", "name": "SK텔레콤",      "market": "국내"},
-    {"code": "030200", "name": "KT",            "market": "국내"},
-    {"code": "086790", "name": "하나금융지주",  "market": "국내"},
-    {"code": "033780", "name": "KT&G",          "market": "국내"},
-    {"code": "003490", "name": "대한항공",      "market": "국내"},
-    {"code": "009150", "name": "삼성전기",      "market": "국내"},
-    {"code": "010130", "name": "고려아연",      "market": "국내"},
-    {"code": "000810", "name": "삼성화재",      "market": "국내"},
-    {"code": "018880", "name": "한온시스템",    "market": "국내"},
-    {"code": "024110", "name": "기업은행",      "market": "국내"},
-    {"code": "034020", "name": "두산에너빌리티","market": "국내"},
-    {"code": "011170", "name": "롯데케미칼",    "market": "국내"},
-    {"code": "012330", "name": "현대모비스",    "market": "국내"},
-    {"code": "004020", "name": "현대제철",      "market": "국내"},
-    {"code": "071050", "name": "한국금융지주",  "market": "국내"},
-    {"code": "316140", "name": "우리금융지주",  "market": "국내"},
-    {"code": "009830", "name": "한화솔루션",    "market": "국내"},
-    {"code": "010950", "name": "S-Oil",         "market": "국내"},
-    {"code": "000100", "name": "유한양행",      "market": "국내"},
-    {"code": "207940", "name": "삼성바이오로직스","market": "국내"},
-    {"code": "006800", "name": "미래에셋증권",  "market": "국내"},
-    {"code": "047050", "name": "포스코인터내셔널","market": "국내"},
-
-    # ── KOSDAQ ──
-    {"code": "035720", "name": "카카오",        "market": "국내"},
-    {"code": "035900", "name": "JYP Ent.",      "market": "국내"},
-    {"code": "352820", "name": "하이브",        "market": "국내"},
-    {"code": "041510", "name": "에스엠",        "market": "국내"},
-    {"code": "122870", "name": "와이지엔터테인먼트","market": "국내"},
-    {"code": "293490", "name": "카카오게임즈",  "market": "국내"},
-    {"code": "251270", "name": "넷마블",        "market": "국내"},
-    {"code": "036570", "name": "엔씨소프트",    "market": "국내"},
-    {"code": "112040", "name": "위메이드",      "market": "국내"},
-    {"code": "263750", "name": "펄어비스",      "market": "국내"},
-    {"code": "247540", "name": "에코프로비엠",  "market": "국내"},
-    {"code": "086520", "name": "에코프로",      "market": "국내"},
-    {"code": "373220", "name": "LG에너지솔루션","market": "국내"},
-    {"code": "196170", "name": "알테오젠",      "market": "국내"},
-    {"code": "091990", "name": "셀트리온헬스케어","market": "국내"},
-    {"code": "214150", "name": "클래시스",      "market": "국내"},
-    {"code": "145020", "name": "휴젤",          "market": "국내"},
-    {"code": "326030", "name": "SK바이오팜",    "market": "국내"},
-    {"code": "039030", "name": "이오테크닉스",  "market": "국내"},
-    {"code": "357780", "name": "솔브레인",      "market": "국내"},
-
-    # ── US ──
-    {"code": "AAPL",  "name": "Apple",          "market": "해외"},
-    {"code": "MSFT",  "name": "Microsoft",      "market": "해외"},
-    {"code": "GOOGL", "name": "Alphabet (Google)","market": "해외"},
-    {"code": "AMZN",  "name": "Amazon",         "market": "해외"},
-    {"code": "NVDA",  "name": "NVIDIA",         "market": "해외"},
-    {"code": "META",  "name": "Meta",           "market": "해외"},
-    {"code": "TSLA",  "name": "Tesla",          "market": "해외"},
-    {"code": "BRK.B", "name": "Berkshire Hathaway","market": "해외"},
-    {"code": "JPM",   "name": "JPMorgan Chase", "market": "해외"},
-    {"code": "V",     "name": "Visa",           "market": "해외"},
-    {"code": "UNH",   "name": "UnitedHealth",   "market": "해외"},
-    {"code": "XOM",   "name": "Exxon Mobil",    "market": "해외"},
-    {"code": "JNJ",   "name": "Johnson & Johnson","market": "해외"},
-    {"code": "WMT",   "name": "Walmart",        "market": "해외"},
-    {"code": "MA",    "name": "Mastercard",     "market": "해외"},
-    {"code": "PG",    "name": "Procter & Gamble","market": "해외"},
-    {"code": "HD",    "name": "Home Depot",     "market": "해외"},
-    {"code": "CVX",   "name": "Chevron",        "market": "해외"},
-    {"code": "MRK",   "name": "Merck",          "market": "해외"},
-    {"code": "ABBV",  "name": "AbbVie",         "market": "해외"},
-    {"code": "COST",  "name": "Costco",         "market": "해외"},
-    {"code": "AMD",   "name": "AMD",            "market": "해외"},
-    {"code": "INTC",  "name": "Intel",          "market": "해외"},
-    {"code": "NFLX",  "name": "Netflix",        "market": "해외"},
-    {"code": "ADBE",  "name": "Adobe",          "market": "해외"},
-    {"code": "CRM",   "name": "Salesforce",     "market": "해외"},
-    {"code": "ORCL",  "name": "Oracle",         "market": "해외"},
-    {"code": "QCOM",  "name": "Qualcomm",       "market": "해외"},
-    {"code": "TXN",   "name": "Texas Instruments","market": "해외"},
-    {"code": "AVGO",  "name": "Broadcom",       "market": "해외"},
-    {"code": "PYPL",  "name": "PayPal",         "market": "해외"},
-    {"code": "BAC",   "name": "Bank of America","market": "해외"},
-    {"code": "GS",    "name": "Goldman Sachs",  "market": "해외"},
-    {"code": "MS",    "name": "Morgan Stanley", "market": "해외"},
-    {"code": "DIS",   "name": "Disney",         "market": "해외"},
-    {"code": "UBER",  "name": "Uber",           "market": "해외"},
-    {"code": "SPOT",  "name": "Spotify",        "market": "해외"},
-    {"code": "SNAP",  "name": "Snap",           "market": "해외"},
-    {"code": "COIN",  "name": "Coinbase",       "market": "해외"},
-    {"code": "PLTR",  "name": "Palantir",       "market": "해외"},
-    {"code": "RBLX",  "name": "Roblox",         "market": "해외"},
-    {"code": "HOOD",  "name": "Robinhood",      "market": "해외"},
-    {"code": "SOFI",  "name": "SoFi",           "market": "해외"},
-    {"code": "ARM",   "name": "Arm Holdings",   "market": "해외"},
-    {"code": "SMCI",  "name": "Super Micro Computer","market": "해외"},
-    {"code": "MU",    "name": "Micron Technology","market": "해외"},
-    {"code": "LRCX",  "name": "Lam Research",   "market": "해외"},
-    {"code": "ASML",  "name": "ASML",           "market": "해외"},
-    {"code": "TSM",   "name": "TSMC",           "market": "해외"},
-]
+from app.database import get_supabase
 
 
-def search_stocks(query: str, limit: int = 10) -> list:
-    q = query.strip().lower()
+def search_stocks(query: str, limit: int = 10, include_us: bool = False) -> list:
+    q = query.strip()
     if not q:
         return []
-    results = [
-        s for s in STOCKS
-        if q in s["name"].lower() or q in s["code"].lower()
-    ]
+
+    results = []
+    seen = set()
+
+    try:
+        db = get_supabase()
+
+        # 국내 종목만 or 전체
+        markets = ["KOSPI", "KOSDAQ"]
+        if include_us:
+            markets.extend(["NASDAQ", "NYSE", "AMEX"])
+
+        # 이름 검색
+        name_results = (
+            db.table("stock_list")
+            .select("code, name, market")
+            .in_("market", markets)
+            .ilike("name", f"%{q}%")
+            .limit(limit)
+            .execute()
+            .data
+        )
+
+        # 코드 검색
+        code_results = (
+            db.table("stock_list")
+            .select("code, name, market")
+            .in_("market", markets)
+            .ilike("code", f"%{q}%")
+            .limit(limit)
+            .execute()
+            .data
+        )
+
+        # full_name(영문 전체명) 검색 — 해외 종목용
+        full_name_results = []
+        if include_us:
+            full_name_results = (
+                db.table("stock_list")
+                .select("code, name, market, full_name")
+                .in_("market", ["NASDAQ", "NYSE", "AMEX"])
+                .ilike("full_name", f"%{q}%")
+                .limit(limit)
+                .execute()
+                .data
+            )
+
+        for item in name_results + code_results + full_name_results:
+            if item["code"] not in seen:
+                seen.add(item["code"])
+                market_label = "해외" if item["market"] in ("NASDAQ", "NYSE", "AMEX") else "국내"
+                results.append({
+                    "code": item["code"],
+                    "name": item["name"],
+                    "market": market_label,
+                })
+    except Exception as e:
+        print(f"[stock_list] DB 검색 실패: {e}")
+
     return results[:limit]

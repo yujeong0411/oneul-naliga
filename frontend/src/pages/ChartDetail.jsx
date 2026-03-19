@@ -440,7 +440,7 @@ export default function ChartDetail() {
 
       {/* PC 전용: 종목 정보 바 */}
       {!isMobile && (
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "20px 32px 0", display: "flex", alignItems: "baseline", gap: 16 }}>
+        <div style={{ padding: "20px 32px 0", display: "flex", alignItems: "baseline", gap: 16 }}>
           <span style={{ fontSize: 22, fontWeight: 800, color: "var(--color-text-primary)", letterSpacing: "-0.5px" }}>{stockName || code}</span>
           {stockName && <span style={{ fontSize: 14, color: "var(--color-text-tertiary)" }}>{code}</span>}
           <span style={{ fontSize: 24, fontWeight: 700, color: "var(--color-text-primary)" }}>
@@ -453,7 +453,7 @@ export default function ChartDetail() {
       )}
 
       {/* 봉 종류 + MA 탭 */}
-      <div className="hide-scrollbar" style={{ display: "flex", gap: 8, padding: isMobile ? "12px 20px" : "12px 32px", overflowX: showMinuteDropdown ? "visible" : "auto", overflowY: showMinuteDropdown ? "visible" : "hidden", background: "var(--color-background-primary)", borderBottom: B, maxWidth: isMobile ? "100%" : 1400, margin: "0 auto", width: "100%", boxSizing: "border-box", position: "relative", zIndex: 15 }}>
+      <div className="hide-scrollbar" style={{ display: "flex", gap: 8, padding: isMobile ? "12px 20px" : "12px 32px", overflowX: showMinuteDropdown ? "visible" : "auto", overflowY: showMinuteDropdown ? "visible" : "hidden", background: "var(--color-background-primary)", borderBottom: B, maxWidth: isMobile ? "100%" : "100%", margin: "0 auto", width: "100%", boxSizing: "border-box", position: "relative", zIndex: 15 }}>
         {TIMEFRAMES.map((tf) => (
           <button
             key={tf}
@@ -547,7 +547,7 @@ export default function ChartDetail() {
 
       {/* PC: 2열 레이아웃 */}
       {!isMobile && (
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "20px 32px", display: "grid", gridTemplateColumns: "minmax(0,1fr) 300px", gap: 20 }}>
+        <div style={{ padding: "20px 32px", display: "grid", gridTemplateColumns: "minmax(0,1fr) 360px", gap: 24 }}>
           {/* 차트 */}
           <div style={{ background: "var(--color-background-primary)", borderRadius: 12, border: B, padding: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>

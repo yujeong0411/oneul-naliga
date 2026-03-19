@@ -26,7 +26,7 @@ async def get_access_token() -> str:
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{BASE_URL}/oauth2/token",
-            json={
+            data={
                 "grant_type": "client_credentials",
                 "appkey": settings.kis_app_key,
                 "appsecret": settings.kis_app_secret,
@@ -112,3 +112,113 @@ async def get_current_price(symbol: str, exchange: str = "NAS") -> float:
         data = resp.json()
 
     return float(data["output"]["last"])
+
+
+async def get_fx_rates() -> list[dict]:
+    """주요 환율 조회 (KIS API)"""
+    token = await get_access_token()
+    today = datetime.now().strftime("%Y%m%d")
+
+    # FX@KRW = 원/달러, 나머지는 크로스 환율
+    fx_codes = [
+        {"code": "FX@KRW", "pair": "USD/KRW", "unit": 1},
+        {"code": "FX@JPY", "pair": "JPY/KRW", "unit": 100},
+        {"code": "FX@EUR", "pair": "EUR/KRW", "unit": 1},
+        {"code": "FX@CNY", "pair": "CNY/KRW", "unit": 1},
+        {"code": "FX@GBP", "pair": "GBP/KRW", "unit": 1},
+    ]
+
+    usd_krw = None
+    results = []
+
+    for fx in fx_codes:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{BASE_URL}/uapi/overseas-price/v1/quotations/inquire-daily-chartprice",
+                    headers={
+                        "authorization": f"Bearer {token}",
+                        "appkey": settings.kis_app_key,
+                        "appsecret": settings.kis_app_secret,
+                        "tr_id": "FHKST03030100",
+                    },
+                    params={
+                        "FID_COND_MRKT_DIV_CODE": "X",
+                        "FID_INPUT_ISCD": fx["code"],
+                        "FID_INPUT_DATE_1": today,
+                        "FID_INPUT_DATE_2": today,
+                        "FID_PERIOD_DIV_CODE": "D",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            output1 = data.get("output1", {})
+            raw_price = float(output1.get("ovrs_nmix_prpr", "0"))
+            change_pct = output1.get("prdy_ctrt", "0.00")
+
+            if fx["code"] == "FX@KRW":
+                # 원/달러 직접
+                usd_krw = raw_price
+                results.append({"pair": fx["pair"], "value": round(raw_price, 2), "unit": fx["unit"], "change_pct": change_pct})
+            else:
+                # 크로스 환율 → 원화 환산 (USD/KRW 필요)
+                if usd_krw and raw_price > 0:
+                    if fx["code"] in ("FX@EUR", "FX@GBP"):
+                        # EUR/USD, GBP/USD → 곱하기
+                        krw_value = usd_krw * raw_price * fx["unit"]
+                    else:
+                        # JPY/USD, CNY/USD → 나누기
+                        krw_value = usd_krw / raw_price * fx["unit"]
+                    results.append({"pair": fx["pair"], "value": round(krw_value, 2), "unit": fx["unit"], "change_pct": change_pct})
+        except Exception as e:
+            print(f"[kis] 환율 {fx['pair']} 조회 실패: {e}")
+
+    return results
+
+
+async def get_us_indices() -> list[dict]:
+    """미국 주요 지수 조회 (다우, 나스닥, S&P500)"""
+    token = await get_access_token()
+    today = datetime.now().strftime("%Y%m%d")
+
+    indices = [
+        {"code": ".DJI",  "name": "DOW"},
+        {"code": "COMP",  "name": "NASDAQ"},
+        {"code": "SPX",   "name": "SP500"},
+    ]
+
+    results = []
+    for idx in indices:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{BASE_URL}/uapi/overseas-price/v1/quotations/inquire-daily-chartprice",
+                    headers={
+                        "authorization": f"Bearer {token}",
+                        "appkey": settings.kis_app_key,
+                        "appsecret": settings.kis_app_secret,
+                        "tr_id": "FHKST03030100",
+                    },
+                    params={
+                        "FID_COND_MRKT_DIV_CODE": "N",
+                        "FID_INPUT_ISCD": idx["code"],
+                        "FID_INPUT_DATE_1": today,
+                        "FID_INPUT_DATE_2": today,
+                        "FID_PERIOD_DIV_CODE": "D",
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+            output1 = data.get("output1", {})
+            if output1:
+                results.append({
+                    "name": idx["name"],
+                    "value": float(output1.get("ovrs_nmix_prpr", "0")),
+                    "change_pct": output1.get("prdy_ctrt", "0.00"),
+                })
+        except Exception as e:
+            print(f"[kis] 지수 {idx['name']} 조회 실패: {e}")
+
+    return results

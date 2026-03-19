@@ -6,6 +6,7 @@ import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
 import SplashScreen from "./components/SplashScreen";
 import { useAlertCount } from "./hooks/useAlertCount";
+import SearchOverlay from "./components/SearchOverlay";
 
 function useBreakpoint() {
   const get = () => window.innerWidth < 768 ? "mobile" : window.innerWidth < 1100 ? "tablet" : "pc";
@@ -49,10 +50,12 @@ function MobileHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const alertCount = useAlertCount();
+  const [showSearch, setShowSearch] = useState(false);
 
   if (location.pathname.startsWith("/chart/")) return null;
 
   return (
+    <>
     <header style={{
       position: "sticky", top: 0, zIndex: 20,
       background: "rgba(255,255,255,0.65)",
@@ -66,7 +69,7 @@ function MobileHeader() {
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         {/* 검색 */}
-        <button style={{ border: "none", background: "none", cursor: "pointer", padding: 6, lineHeight: 0, color: "var(--color-text-tertiary)" }}>
+        <button onClick={() => setShowSearch(true)} style={{ border: "none", background: "none", cursor: "pointer", padding: 6, lineHeight: 0, color: "var(--color-text-tertiary)" }}>
           <Icon d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" size={20} />
         </button>
         {/* 알림 */}
@@ -91,6 +94,9 @@ function MobileHeader() {
         </button>
       </div>
     </header>
+
+    {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} />}
+    </>
   );
 }
 
@@ -155,8 +161,10 @@ function BottomNav() {
 function TopNav() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [showSearch, setShowSearch] = useState(false);
 
   return (
+    <>
     <header style={{
       position: "sticky", top: 0, zIndex: 50,
       background: "rgba(255,255,255,0.65)",
@@ -171,7 +179,13 @@ function TopNav() {
         <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.3px" }}>오늘 날이가</span>
       </div>
 
-      <nav style={{ display: "flex", alignItems: "center", gap: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {/* 검색 */}
+        <button onClick={() => setShowSearch(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: "none", background: "transparent", color: "var(--color-text-tertiary)", fontSize: 13, cursor: "pointer" }}>
+          <Icon d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" size={16} />
+          검색
+        </button>
+
         {NAV.map((item) => {
           const active = location.pathname === item.path;
           return (
@@ -189,8 +203,10 @@ function TopNav() {
             </button>
           );
         })}
-      </nav>
+      </div>
     </header>
+    {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} />}
+    </>
   );
 }
 
