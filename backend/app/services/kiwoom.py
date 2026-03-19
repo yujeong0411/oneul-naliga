@@ -153,7 +153,7 @@ async def get_current_price(symbol: str) -> float:
         resp.raise_for_status()
         data = resp.json()
 
-    return float(data["cur_prc"])
+    return abs(float(data["cur_prc"]))
 
 
 async def _call_ranking(endpoint: str, api_id: str, body: dict) -> dict:
@@ -176,9 +176,9 @@ async def _call_ranking(endpoint: str, api_id: str, body: dict) -> dict:
 
 
 def _parse_price(raw: str) -> float:
-    """'+74800' / '-152000' → float"""
+    """'+74800' / '-152000' → float (항상 양수)"""
     try:
-        return float(str(raw).replace("+", "").replace(",", ""))
+        return abs(float(str(raw).replace("+", "").replace(",", "")))
     except (ValueError, TypeError):
         return 0.0
 
