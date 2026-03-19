@@ -545,25 +545,26 @@ export default function ChartDetail() {
         )}
       </div>
 
-      {/* PC: 2열 레이아웃 */}
+      {/* PC: 레이아웃 */}
       {!isMobile && (
-        <div style={{ padding: "20px 32px", display: "grid", gridTemplateColumns: "minmax(0,1fr) 360px", gap: 24 }}>
-          {/* 차트 */}
-          <div style={{ background: "var(--color-background-primary)", borderRadius: 12, border: B, padding: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
-                {drawMode ? (drawPoints.length === 0 ? "① 첫 번째 고점을 클릭하세요" : "② 두 번째 고점을 클릭하세요") : "차트 클릭으로 고점 선택"}
-              </span>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => { setDrawMode(false); setDrawPoints([]); }} style={{ padding: "4px 12px", fontSize: 11, borderRadius: 20, border: B, background: !drawMode ? "var(--color-text-primary)" : "transparent", color: !drawMode ? "white" : "var(--color-text-secondary)", cursor: "pointer" }}>보기</button>
-                <button onClick={() => setDrawMode(true)} style={{ padding: "4px 12px", fontSize: 11, borderRadius: 20, border: B, background: drawMode ? "var(--color-text-primary)" : "transparent", color: drawMode ? "white" : "var(--color-text-secondary)", cursor: "pointer" }}>선 긋기</button>
-              </div>
-            </div>
-            <div ref={chartRef} style={{ width: "100%", cursor: drawMode ? "crosshair" : "default" }} />
-          </div>
+        <div style={{ padding: "20px 32px", display: "flex", flexDirection: "column", gap: 24 }}>
 
-          {/* 사이드바: 탭 전환 (내 선 / 호가) */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* 상단: 차트(좌) + 내 선(우) */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 24 }}>
+            {/* 차트 */}
+            <div style={{ background: "var(--color-background-primary)", borderRadius: 12, border: B, padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                  {drawMode ? (drawPoints.length === 0 ? "① 첫 번째 고점을 클릭하세요" : "② 두 번째 고점을 클릭하세요") : "차트 클릭으로 고점 선택"}
+                </span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button onClick={() => { setDrawMode(false); setDrawPoints([]); }} style={{ padding: "4px 12px", fontSize: 11, borderRadius: 20, border: B, background: !drawMode ? "var(--color-text-primary)" : "transparent", color: !drawMode ? "white" : "var(--color-text-secondary)", cursor: "pointer" }}>보기</button>
+                  <button onClick={() => setDrawMode(true)} style={{ padding: "4px 12px", fontSize: 11, borderRadius: 20, border: B, background: drawMode ? "var(--color-text-primary)" : "transparent", color: drawMode ? "white" : "var(--color-text-secondary)", cursor: "pointer" }}>선 긋기</button>
+                </div>
+              </div>
+              <div ref={chartRef} style={{ width: "100%", cursor: drawMode ? "crosshair" : "default" }} />
+            </div>
+
             {/* 내 선 */}
             <div style={{ background: "var(--color-background-primary)", borderRadius: 12, border: B, overflow: "hidden" }}>
               <div style={{ padding: "12px 20px", borderBottom: B }}>
@@ -571,9 +572,12 @@ export default function ChartDetail() {
               </div>
               {renderLineList()}
             </div>
+          </div>
 
-            {/* 호가 (국내 종목만) */}
-            {isDomestic && (
+          {/* 하단: 호가 + 투자자별 (국내 종목만, 좌우 균등) */}
+          {isDomestic && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+              {/* 호가 */}
               <div style={{ background: "var(--color-background-primary)", borderRadius: 12, border: B, overflow: "hidden" }}>
                 <div style={{ padding: "12px 20px", borderBottom: B }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>호가</span>
@@ -584,18 +588,17 @@ export default function ChartDetail() {
                   onSaveSupportResistance={handleSaveOrderbookSR}
                 />
               </div>
-            )}
 
-            {/* 투자자별 매매동향 (국내 종목만) */}
-            {isDomestic && (
+              {/* 투자자별 매매동향 */}
               <div style={{ background: "var(--color-background-primary)", borderRadius: 12, border: B, overflow: "hidden" }}>
                 <div style={{ padding: "12px 20px", borderBottom: B }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>투자자</span>
                 </div>
                 <InvestorPanel market={market} code={code} />
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
         </div>
       )}
 

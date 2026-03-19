@@ -133,6 +133,13 @@ button {
   background: linear-gradient(160deg, #0f1a1f 0%, #151525 50%, #1a1020 100%) fixed;
 }
 
+.splash-bg {
+  background: linear-gradient(160deg, #eef8f4 0%, #f2f0f9 50%, #fdf1ef 100%);
+}
+[data-theme="dark"] .splash-bg {
+  background: linear-gradient(160deg, #0f1a1f 0%, #151525 50%, #1a1020 100%);
+}
+
 [data-theme="dark"] .glass {
   background: rgba(26, 26, 46, 0.8) !important;
 }
