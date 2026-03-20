@@ -15,7 +15,7 @@ _token_cache: dict = {}
 
 
 async def get_access_token() -> str:
-    """한투 API 액세스 토큰 발급"""
+    """한투 API 액세스 토큰 발급 (캐시 적용, 중복 발급 방지)"""
     if not settings.kis_app_key or not settings.kis_app_secret:
         raise RuntimeError("KIS API 키가 설정되지 않았습니다")
     now = datetime.now().timestamp()
@@ -23,7 +23,11 @@ async def get_access_token() -> str:
     if _token_cache.get("token") and _token_cache.get("expires_at", 0) > now + 60:
         return _token_cache["token"]
 
-    async with httpx.AsyncClient() as client:
+    # 기존 토큰이 있으면 폐기 후 재발급
+    if _token_cache.get("token"):
+        await revoke_token()
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
             f"{BASE_URL}/oauth2/token",
             data={
@@ -37,7 +41,28 @@ async def get_access_token() -> str:
 
     _token_cache["token"] = data["access_token"]
     _token_cache["expires_at"] = now + data.get("expires_in", 86400)
+    print(f"[kis] 토큰 발급 완료, 만료: {datetime.fromtimestamp(_token_cache['expires_at']).strftime('%Y-%m-%d %H:%M')}")
     return _token_cache["token"]
+
+
+async def revoke_token() -> None:
+    """한투 API 접근토큰 폐기"""
+    token = _token_cache.get("token")
+    if not token:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{BASE_URL}/oauth2/revokeP",
+                json={
+                    "appkey": settings.kis_app_key,
+                    "appsecret": settings.kis_app_secret,
+                    "token": token,
+                },
+            )
+    except Exception as e:
+        print(f"[kis] 토큰 폐기 실패: {e}")
+    _token_cache.clear()
 
 
 async def get_daily_candles(symbol: str, count: int = 200) -> list[StockCandle]:

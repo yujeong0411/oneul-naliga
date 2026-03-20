@@ -57,7 +57,7 @@ function toChartTime(dateStr, isIntraday) {
 }
 
 function lineColor(signalType) {
-  return signalType === "loss" ? "#c05858" : "#3a9e62";
+  return signalType === "loss" ? "#e53e3e" : "#38a169";
 }
 
 // ── 컴포넌트 ──────────────────────────────────
@@ -88,6 +88,7 @@ export default function ChartDetail() {
   const [mobileTab,   setMobileTab]   = useState("lines"); // "lines" | "detect" | "orderbook"
   const [showOrderbookLines, setShowOrderbookLines] = useState(true);
   const [showMinuteDropdown, setShowMinuteDropdown] = useState(false);
+  const [chartReady, setChartReady] = useState(0);
   const [stockName, setStockName] = useState(location.state?.name || "");
 
   const isDomestic    = /^\d{6}$/.test(code);
@@ -99,7 +100,7 @@ export default function ChartDetail() {
   const isIntraday = timeframe.endsWith("분");
 
   useEffect(() => {
-    const count = timeframe === "년봉" ? 30 : timeframe === "월봉" ? 120 : timeframe === "주봉" ? 150 : 300;
+    const count = timeframe === "년봉" ? 50 : timeframe === "월봉" ? 600 : timeframe === "주봉" ? 600 : 600;
     getCandles(market, code, timeframe, count)
       .then((data) => {
         const chartData = (data.candles ?? []).reverse().map((c) => ({
@@ -159,6 +160,7 @@ export default function ChartDetail() {
     cs.setData(candles);
     candleSeries.current  = cs;
     chartInstance.current = chart;
+    setChartReady((n) => n + 1);
 
     const onResize = () => {
       if (chartRef.current) chart.applyOptions({ width: chartRef.current.clientWidth });
@@ -190,38 +192,44 @@ export default function ChartDetail() {
 
   // ── 선 렌더링 ──────────────────────────────
 
+  const priceLinesRef = useRef([]);
+
   useEffect(() => {
     if (!chartInstance.current || !candleSeries.current) return;
     const chart = chartInstance.current;
+    const cs = candleSeries.current;
+
+    // 기존 수평선 제거
+    priceLinesRef.current.forEach((pl) => { try { cs.removePriceLine(pl); } catch {} });
+    priceLinesRef.current = [];
 
     // 기존 추세선 제거
     Object.values(trendSeriesMap.current).forEach((s) => { try { chart.removeSeries(s); } catch {} });
     trendSeriesMap.current = {};
 
-    // 캔들 시리즈 교체 (수평선 확실히 초기화)
-    try { chart.removeSeries(candleSeries.current); } catch {}
-    const cs = chart.addCandlestickSeries({
-      upColor: "#3a9e62", downColor: "#c05858",
-      borderUpColor: "#3a9e62", borderDownColor: "#c05858",
-      wickUpColor: "#3a9e62", wickDownColor: "#c05858",
-    });
-    cs.setData(candles);
-    candleSeries.current = cs;
-
     lines.forEach((line) => {
       const color = lineColor(line.signal_type);
       if (line.line_type === "horizontal" && line.price) {
-        cs.createPriceLine({ price: line.price, color, lineWidth: 1.5, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: line.name || "" });
+        const pl = cs.createPriceLine({ price: line.price, color, lineWidth: 2, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: line.name || "" });
+        priceLinesRef.current.push(pl);
       } else if (line.line_type === "trend" && line.x1 && line.x2) {
-        const s = chart.addLineSeries({ color, lineWidth: 1.5, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
+        const s = chart.addLineSeries({ color, lineWidth: 2, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
+        // x1/x2가 Unix timestamp(숫자)면 일봉 차트용 문자열로 변환
+        const toTime = (v) => {
+          if (typeof v === "number") {
+            const d = new Date(v * 1000);
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+          }
+          return v;
+        };
         s.setData([
-          { time: line.x1, value: line.y1 },
-          { time: line.x2, value: line.y2 },
+          { time: toTime(line.x1), value: line.y1 },
+          { time: toTime(line.x2), value: line.y2 },
         ]);
         trendSeriesMap.current[line.id] = s;
       }
     });
-  }, [lines, candles]);
+  }, [lines, chartReady]);
 
   // ── 호가 기반 지지/저항선 차트 표시 ─────────
 
@@ -250,7 +258,7 @@ export default function ChartDetail() {
       });
       obPriceLinesRef.current.push(pl);
     });
-  }, [obSR, showOrderbookLines]);
+  }, [obSR, showOrderbookLines, chartReady]);
 
   // ── 차트 클릭 (PC 선 긋기) ─────────────────
 
@@ -355,6 +363,38 @@ export default function ChartDetail() {
 
   // ── 렌더: 선 목록 ──────────────────────────
 
+  const scrollToLine = (line) => {
+    if (!chartInstance.current) return;
+    const ts = chartInstance.current.timeScale();
+    if (line.line_type === "horizontal" && line.price) {
+      // 수평선: 현재 보이는 범위 유지, 가격 축을 해당 가격 중심으로 이동
+      const cs = candleSeries.current;
+      if (cs) {
+        // 가격이 보이도록 차트 범위 내 마지막 캔들로 스크롤 + 가격 하이라이트
+        const range = ts.getVisibleLogicalRange();
+        if (range) ts.setVisibleLogicalRange(range);
+        // 가격 축 포커스를 위해 crosshair 시뮬레이션 대신 fitContent 후 스크롤
+        chartInstance.current.priceScale("right").applyOptions({ autoScale: false });
+        const mid = line.price;
+        const margin = mid * 0.03;
+        cs.applyOptions({ autoscaleInfoProvider: undefined });
+        setTimeout(() => {
+          chartInstance.current.priceScale("right").applyOptions({ autoScale: true });
+        }, 100);
+      }
+    } else if (line.line_type === "trend" && line.x1) {
+      // 추세선: 시작점 시간으로 스크롤
+      const toTime = (v) => {
+        if (typeof v === "number") {
+          const d = new Date(v * 1000);
+          return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+        }
+        return v;
+      };
+      ts.setVisibleRange({ from: toTime(line.x1), to: toTime(line.x2 || line.x1) });
+    }
+  };
+
   const renderLineList = () => (
     <div>
       {lines.length === 0 ? (
@@ -365,7 +405,7 @@ export default function ChartDetail() {
           const target  = line.line_type === "horizontal" ? line.price : line.y2;
           const dist    = target && displayPrice ? ((displayPrice - target) / target * 100).toFixed(2) : null;
           return (
-            <div key={line.id} style={{ padding: "14px 20px", borderBottom: i < lines.length - 1 ? B : "none" }}>
+            <div key={line.id} onClick={() => scrollToLine(line)} style={{ padding: "14px 20px", borderBottom: i < lines.length - 1 ? B : "none", cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 14, height: 2.5, background: color, borderRadius: 1 }} />
@@ -469,7 +509,7 @@ export default function ChartDetail() {
               flexShrink: 0, padding: "6px 14px", fontSize: 13, borderRadius: 20, border: B,
               fontWeight: timeframe === tf ? 600 : 400,
               background: timeframe === tf ? "var(--color-text-primary)" : "transparent",
-              color: timeframe === tf ? "white" : "var(--color-text-secondary)",
+              color: timeframe === tf ? "var(--color-background-primary)" : "var(--color-text-secondary)",
               cursor: "pointer",
             }}
           >
@@ -484,7 +524,7 @@ export default function ChartDetail() {
               padding: "6px 14px", fontSize: 13, borderRadius: 20, border: B,
               fontWeight: isIntraday ? 600 : 400,
               background: isIntraday ? "var(--color-text-primary)" : "transparent",
-              color: isIntraday ? "white" : "var(--color-text-secondary)",
+              color: isIntraday ? "var(--color-background-primary)" : "var(--color-text-secondary)",
               cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
             }}
           >
@@ -565,8 +605,8 @@ export default function ChartDetail() {
                   {drawMode ? (drawPoints.length === 0 ? "① 첫 번째 고점을 클릭하세요" : "② 두 번째 고점을 클릭하세요") : "차트 클릭으로 고점 선택"}
                 </span>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => { setDrawMode(false); setDrawPoints([]); }} style={{ padding: "4px 12px", fontSize: 11, borderRadius: 20, border: B, background: !drawMode ? "var(--color-text-primary)" : "transparent", color: !drawMode ? "white" : "var(--color-text-secondary)", cursor: "pointer" }}>보기</button>
-                  <button onClick={() => setDrawMode(true)} style={{ padding: "4px 12px", fontSize: 11, borderRadius: 20, border: B, background: drawMode ? "var(--color-text-primary)" : "transparent", color: drawMode ? "white" : "var(--color-text-secondary)", cursor: "pointer" }}>선 긋기</button>
+                  <button onClick={() => { setDrawMode(false); setDrawPoints([]); }} style={{ padding: "4px 12px", fontSize: 11, borderRadius: 20, border: B, background: !drawMode ? "var(--color-text-primary)" : "transparent", color: !drawMode ? "var(--color-background-primary)" : "var(--color-text-secondary)", cursor: "pointer" }}>보기</button>
+                  <button onClick={() => setDrawMode(true)} style={{ padding: "4px 12px", fontSize: 11, borderRadius: 20, border: B, background: drawMode ? "var(--color-text-primary)" : "transparent", color: drawMode ? "var(--color-background-primary)" : "var(--color-text-secondary)", cursor: "pointer" }}>선 긋기</button>
                 </div>
               </div>
               <div ref={chartRef} style={{ width: "100%", cursor: drawMode ? "crosshair" : "default" }} />

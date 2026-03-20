@@ -33,6 +33,19 @@ def _parse_price(raw: str) -> float:
         return 0.0
 
 
+def _is_market_open():
+    """국내 주식시장 운영 시간인지 확인 (평일 08:30~15:40 KST)"""
+    from datetime import datetime, timezone, timedelta
+    kst = timezone(timedelta(hours=9))
+    now = datetime.now(kst)
+    # 주말 제외
+    if now.weekday() >= 5:
+        return False
+    # 08:30 ~ 15:40
+    t = now.hour * 60 + now.minute
+    return 510 <= t <= 940  # 8*60+30=510, 15*60+40=940
+
+
 async def stream_prices(stock_codes: list[str], on_price, real_type: str = "0B"):
     """
     실시간 가격 스트리밍. 연결 끊김 시 지수 백오프로 자동 재연결.
@@ -45,6 +58,10 @@ async def stream_prices(stock_codes: list[str], on_price, real_type: str = "0B")
     attempt = 0
 
     while True:
+        # 장 마감 시 재연결 하지 않음
+        if not _is_market_open():
+            await asyncio.sleep(60)
+            continue
         try:
             token = await get_access_token()
 
@@ -144,6 +161,10 @@ async def stream_orderbook(stock_codes: list[str], on_orderbook):
     attempt = 0
 
     while True:
+        if not _is_market_open():
+            await asyncio.sleep(60)
+            continue
+
         try:
             token = await get_access_token()
 

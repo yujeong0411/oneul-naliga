@@ -168,7 +168,7 @@ async def get_candles(
     market: Literal["KOSPI", "KOSDAQ", "US"],
     symbol: str,
     timeframe: str = Query(default="일봉"),
-    count: int = Query(default=200, ge=1, le=500),
+    count: int = Query(default=200, ge=1, le=1000),
     exchange: str = Query(default="NAS", description="US 전용: NAS, NYS, AMS"),
 ):
     """캔들 데이터 조회 (timeframe: 일봉·주봉·월봉·60분·30분)"""

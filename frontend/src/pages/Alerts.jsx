@@ -85,7 +85,7 @@ export default function Alerts() {
                 padding: "6px 14px", fontSize: 12, borderRadius: 20, border: "none",
                 fontWeight: filter === key ? 600 : 400, cursor: "pointer",
                 background: filter === key ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
-                color: filter === key ? "#fff" : "var(--color-text-secondary)",
+                color: filter === key ? "var(--color-background-primary)" : "var(--color-text-secondary)",
               }}
             >
               {label}
