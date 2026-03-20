@@ -45,22 +45,30 @@ async def get_access_token() -> str:
 
 
 async def _get_chart(api_id: str, body: dict, result_key: str, count: int, date_key: str = "dt") -> list[StockCandle]:
-    """차트 공통 호출 헬퍼"""
-    token = await get_access_token()
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{BASE_URL}/api/dostk/chart",
-            headers={
-                "authorization": f"Bearer {token}",
-                "Content-Type": "application/json;charset=UTF-8",
-                "api-id": api_id,
-                "cont-yn": "N",
-                "next-key": "",
-            },
-            json=body,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    """차트 공통 호출 헬퍼 (토큰 만료 시 1회 재시도)"""
+    for attempt in range(2):
+        token = await get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{BASE_URL}/api/dostk/chart",
+                headers={
+                    "authorization": f"Bearer {token}",
+                    "Content-Type": "application/json;charset=UTF-8",
+                    "api-id": api_id,
+                    "cont-yn": "N",
+                    "next-key": "",
+                },
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            rc = data.get("return_code", 0)
+            if rc != 0 and attempt == 0:
+                print(f"[kiwoom] {api_id} return_code={rc}, 토큰 재발급 후 재시도")
+                await revoke_token()
+                _token_cache.clear()
+                continue
+            break
 
     candles = []
     for item in data.get(result_key, [])[:count]:
@@ -135,44 +143,59 @@ async def get_yearly_candles(symbol: str, count: int = 30) -> list[StockCandle]:
 
 
 async def get_current_price(symbol: str) -> float:
-    """국내 주식 현재가 조회 (ka10001)"""
-    token = await get_access_token()
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{BASE_URL}/api/dostk/stkinfo",
-            headers={
-                "authorization": f"Bearer {token}",
-                "Content-Type": "application/json;charset=UTF-8",
-                "api-id": "ka10001",
-                "cont-yn": "N",
-                "next-key": "",
-            },
-            json={"stk_cd": symbol},
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    """국내 주식 현재가 조회 (ka10001) — 토큰 만료 시 1회 재시도"""
+    for attempt in range(2):
+        token = await get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{BASE_URL}/api/dostk/stkinfo",
+                headers={
+                    "authorization": f"Bearer {token}",
+                    "Content-Type": "application/json;charset=UTF-8",
+                    "api-id": "ka10001",
+                    "cont-yn": "N",
+                    "next-key": "",
+                },
+                json={"stk_cd": symbol},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            rc = data.get("return_code", 0)
+            if rc != 0 and attempt == 0:
+                print(f"[kiwoom] ka10001 return_code={rc}, 토큰 재발급 후 재시도")
+                await revoke_token()
+                _token_cache.clear()
+                continue
+            break
 
     return abs(float(data["cur_prc"]))
 
 
 async def _call_ranking(endpoint: str, api_id: str, body: dict) -> dict:
-    """랭킹 TR 공통 호출"""
-    token = await get_access_token()
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{BASE_URL}{endpoint}",
-            headers={
-                "authorization": f"Bearer {token}",
-                "Content-Type": "application/json;charset=UTF-8",
-                "api-id": api_id,
-                "cont-yn": "N",
-                "next-key": "",
-            },
-            json=body,
-        )
-        resp.raise_for_status()
-        return resp.json()
+    """랭킹 TR 공통 호출 (토큰 만료 시 1회 재시도)"""
+    for attempt in range(2):
+        token = await get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{BASE_URL}{endpoint}",
+                headers={
+                    "authorization": f"Bearer {token}",
+                    "Content-Type": "application/json;charset=UTF-8",
+                    "api-id": api_id,
+                    "cont-yn": "N",
+                    "next-key": "",
+                },
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            rc = data.get("return_code", 0)
+            if rc != 0 and attempt == 0:
+                print(f"[kiwoom] {api_id} return_code={rc}, 토큰 재발급 후 재시도")
+                await revoke_token()
+                _token_cache.clear()
+                continue
+            return data
 
 
 def _parse_price(raw: str) -> float:
@@ -353,28 +376,35 @@ async def get_investor_trades(symbol: str, count: int = 20) -> list[dict]:
     개인/외국인/기관 순매수 (수량 기준, 단주)
     """
     today = datetime.now().strftime("%Y%m%d")
-    token = await get_access_token()
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{BASE_URL}/api/dostk/chart",
-            headers={
-                "authorization": f"Bearer {token}",
-                "Content-Type": "application/json;charset=UTF-8",
-                "api-id": "ka10060",
-                "cont-yn": "N",
-                "next-key": "",
-            },
-            json={
-                "dt": today,
-                "stk_cd": symbol,
-                "amt_qty_tp": "2",   # 수량
-                "trde_tp": "0",      # 순매수
-                "unit_tp": "1",      # 단주
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    for attempt in range(2):
+        token = await get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{BASE_URL}/api/dostk/chart",
+                headers={
+                    "authorization": f"Bearer {token}",
+                    "Content-Type": "application/json;charset=UTF-8",
+                    "api-id": "ka10060",
+                    "cont-yn": "N",
+                    "next-key": "",
+                },
+                json={
+                    "dt": today,
+                    "stk_cd": symbol,
+                    "amt_qty_tp": "2",
+                    "trde_tp": "0",
+                    "unit_tp": "1",
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            rc = data.get("return_code", 0)
+            if rc != 0 and attempt == 0:
+                print(f"[kiwoom] ka10060 return_code={rc}, 토큰 재발급 후 재시도")
+                await revoke_token()
+                _token_cache.clear()
+                continue
+            break
 
     results = []
     for item in data.get("stk_invsr_orgn_chart", [])[:count]:
@@ -407,22 +437,29 @@ async def get_orderbook(symbol: str) -> dict:
       매수 N차: buy_Nth_pre_bid(호가), buy_Nth_pre_req(잔량)  (N=2~10)
       총잔량:   tot_sel_req, tot_buy_req
     """
-    token = await get_access_token()
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{BASE_URL}/api/dostk/mrkcond",
-            headers={
-                "authorization": f"Bearer {token}",
-                "Content-Type": "application/json;charset=UTF-8",
-                "api-id": "ka10004",
-                "cont-yn": "N",
-                "next-key": "",
-            },
-            json={"stk_cd": symbol},
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    for attempt in range(2):
+        token = await get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{BASE_URL}/api/dostk/mrkcond",
+                headers={
+                    "authorization": f"Bearer {token}",
+                    "Content-Type": "application/json;charset=UTF-8",
+                    "api-id": "ka10004",
+                    "cont-yn": "N",
+                    "next-key": "",
+                },
+                json={"stk_cd": symbol},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            rc = data.get("return_code", 0)
+            if rc != 0 and attempt == 0:
+                print(f"[kiwoom] ka10004 return_code={rc}, 토큰 재발급 후 재시도")
+                await revoke_token()
+                _token_cache.clear()
+                continue
+            break
 
     # 매도호가 키 매핑 (10차→1차, 높은 가격부터)
     _SEL_KEYS = [
@@ -476,6 +513,28 @@ async def get_orderbook(symbol: str) -> dict:
         "total_ask_qty": total_ask_qty,
         "total_bid_qty": total_bid_qty,
     }
+
+
+async def revoke_token() -> None:
+    """키움 서버에 접근토큰 폐기 요청 (au10002)"""
+    token = _token_cache.get("token")
+    if not token:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"{BASE_URL}/oauth2/revoke",
+                headers={
+                    "Content-Type": "application/json;charset=UTF-8",
+                },
+                json={
+                    "appkey": settings.kiwoom_app_key,
+                    "secretkey": settings.kiwoom_app_secret,
+                    "token": token,
+                },
+            )
+    except Exception as e:
+        print(f"[kiwoom] 토큰 폐기 실패: {e}")
 
 
 def invalidate_token() -> None:

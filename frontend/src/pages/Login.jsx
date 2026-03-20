@@ -21,26 +21,24 @@ export default function Login() {
         flex: 1,
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
-        paddingBottom: isMobile ? "4vh" : 0,
-        position: "relative",
+        paddingTop: isMobile ? "20vh" : 0,
+        paddingBottom: isMobile ? "0" : 0,
         width: "100%",
       }}>
-        {/* 타이틀 + 문구 → 버튼 등장 시 페이드아웃 */}
+        {/* 타이틀 + 문구 (항상 노출) */}
         <div style={{
           textAlign: "center",
-          opacity: showButton ? 0 : 1,
-          transition: "opacity 0.4s ease",
-          position: "absolute",
+          animation: "splashIn 0.4s ease forwards",
         }}>
           <h1 style={{
             margin: 0, fontSize: 34, fontWeight: 800,
-            color: "var(--color-text-primary)", letterSpacing: "-0.5px",
+            color: "#111827", letterSpacing: "-0.5px",
           }}>
             오늘 날이가
           </h1>
           <p style={{
             margin: "12px 0 0", fontSize: 18,
-            color: "var(--color-text-tertiary)", fontWeight: 400,
+            color: "#6b7280", fontWeight: 400,
           }}>
             오늘 하루도 건승하세요!
           </p>
@@ -48,16 +46,17 @@ export default function Login() {
 
         {/* 카카오 버튼 → 스르륵 아래에서 등장 */}
         <div style={{
-          marginTop: isMobile ? "28vh" : "12vh",
+          marginTop: 40,
           opacity: showButton ? 1 : 0,
-          transform: showButton ? "translateY(0)" : "translateY(20px)",
-          transition: "opacity 0.5s ease, transform 0.5s ease",
+          transform: showButton ? "translateY(0)" : "translateY(24px)",
+          transition: "opacity 0.6s ease, transform 0.6s ease",
+          width: isMobile ? "80%" : "320px",
         }}>
           <button
             onClick={loginWithKakao}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              padding: "0 28px", height: 52, borderRadius: 12, border: "none",
+              width: "100%", height: 52, borderRadius: 12, border: "none",
               background: "#FEE500", color: "#191919",
               fontSize: 16, fontWeight: 700, cursor: "pointer",
               boxShadow: "0 2px 8px rgba(0,0,0,0.12)",

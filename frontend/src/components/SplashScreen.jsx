@@ -30,14 +30,14 @@ export default function SplashScreen({ onComplete }) {
       }}>
         <h1 style={{
           margin: 0, fontSize: 34, fontWeight: 800,
-          color: "var(--color-text-primary)",
+          color: "#111827",
           letterSpacing: "-0.5px",
         }}>
           오늘 날이가
         </h1>
         <p style={{
           margin: "12px 0 0", fontSize: 18,
-          color: "var(--color-text-tertiary)",
+          color: "#6b7280",
           fontWeight: 400,
         }}>
           오늘 하루도 건승하세요!
@@ -51,6 +51,7 @@ export default function SplashScreen({ onComplete }) {
           width: "100%",
           flexShrink: 0,
           overflow: "hidden",
+          position: "relative",
         }}>
           <img
             src="/splash_logo.png"

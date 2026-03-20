@@ -20,7 +20,12 @@
       "Bash(ls:*)",
       "Bash(python scripts/upload_stock_list.py)",
       "Bash(python scripts/upload_us_stock_list.py)",
-      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/data/stock_list.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''OK''\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/data/stock_list.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''OK''\\)\")",
+      "Bash(python:*)",
+      "Bash(\"C:/Users/choiy/Desktop/oneul-naliga/.venv/Scripts/python.exe\" -c \":*)",
+      "Bash(\"C:\\\\Users\\\\choiy\\\\Desktop\\\\oneul-naliga\\\\backend\\\\.venv\\\\Scripts\\\\python.exe\" -c \"\nimport httpx, asyncio\n\nasync def test\\(\\):\n    try:\n        async with httpx.AsyncClient\\(\\) as client:\n            resp = await client.post\\(\n                'https://api.kiwoom.com/oauth2/token',\n                headers={'Content-Type': 'application/json;charset=UTF-8'},\n                json={\n                    'grant_type': 'client_credentials',\n                    'appkey': 'kitLSk9Vn1ym6QhAvBoDG5FhMZq96SF4wQXYj4BhAEg',\n                    'secretkey': '6BFJcWFBUaBYMBcmlKYccPmh9WNZ2TkBlfbFb8Hxsr0',\n                },\n                timeout=10.0,\n            \\)\n            print\\(f'Status: {resp.status_code}'\\)\n            print\\(f'Body: {resp.text[:500]}'\\)\n    except Exception as e:\n        print\\(f'Error: {type\\(e\\).__name__}: {e}'\\)\n\nasyncio.run\\(test\\(\\)\\)\n\")",
+      "Bash(curl -s http://localhost:8000/api/stocks/ranking?type=volume)",
+      "Bash(head -c 300 echo echo --- curl -s http://localhost:8000/api/stocks/ranking?type=rise)"
     ]
   }
 }

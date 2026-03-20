@@ -94,7 +94,7 @@ function PopularSection({ isMobile, isPC, navigate }) {
               flexShrink: 0, padding: "6px 14px", fontSize: 12, borderRadius: 20, border: "none",
               fontWeight: activeTab === type ? 600 : 400, cursor: "pointer",
               background: activeTab === type ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
-              color: activeTab === type ? "white" : "var(--color-text-secondary)",
+              color: activeTab === type ? "var(--color-background-primary)" : "var(--color-text-secondary)",
             }}>
             {label}
           </button>
@@ -376,7 +376,7 @@ export default function Home() {
         <div style={{ padding: "36px 20px", textAlign: "center" }}>
           <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-tertiary)" }}>관심 종목을 추가해보세요.</p>
           <button onClick={() => setShowAddSheet(true)}
-            style={{ marginTop: 12, padding: "9px 20px", fontSize: 13, fontWeight: 600, background: "var(--color-text-primary)", color: "white", border: "none", borderRadius: 10, cursor: "pointer" }}>
+            style={{ marginTop: 12, padding: "9px 20px", fontSize: 13, fontWeight: 600, background: "var(--color-text-primary)", color: "var(--color-background-primary)", border: "none", borderRadius: 10, cursor: "pointer" }}>
             + 종목 추가
           </button>
         </div>
