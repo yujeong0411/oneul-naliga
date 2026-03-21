@@ -28,12 +28,18 @@ export const searchStocks = (q) =>
 // ── 인기종목 랭킹 ─────────────────────────────────
 
 export const getRanking = (type = "view") =>
-  fetch(`${BASE}/stocks/ranking?type=${type}`).then((r) => r.json());
+  fetch(`${BASE}/stocks/ranking?type=${type}`).then((r) => {
+    if (r.status === 503) throw Object.assign(new Error("maintenance"), { maintenance: true });
+    return r.json();
+  });
 
 // ── 시장 지수 ─────────────────────────────────────
 
 export const getIndices = () =>
-  fetch(`${BASE}/stocks/indices`).then((r) => r.json());
+  fetch(`${BASE}/stocks/indices`).then((r) => r.json()).then((r) => ({
+    data: r.data ?? r,
+    errors: r.errors ?? [],
+  }));
 
 // ── 환율 ───────────────────────────────────────────
 

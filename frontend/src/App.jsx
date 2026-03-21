@@ -247,9 +247,7 @@ function TopNav() {
 function AppLayout() {
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
-  const { user, loading } = useAuth();
-
-  if (loading) return <div className="splash-bg" style={{ position: "fixed", inset: 0 }} />;
+  const { user } = useAuth();
 
   // 로그인 안 된 경우 (/auth/callback 은 허용)
   const path = window.location.pathname;
@@ -271,9 +269,21 @@ function AppLayout() {
   );
 }
 
-export default function App() {
+function AppWithSplash() {
+  const { loading: authLoading } = useAuth();
   const [splashDone, setSplashDone] = useState(false);
 
+  return (
+    <>
+      {!splashDone && <SplashScreen onComplete={() => setSplashDone(true)} ready={!authLoading} />}
+      <BrowserRouter>
+        <AppLayout />
+      </BrowserRouter>
+    </>
+  );
+}
+
+export default function App() {
   // 저장된 테마 적용
   useEffect(() => {
     const saved = localStorage.getItem("theme");
@@ -282,10 +292,7 @@ export default function App() {
 
   return (
     <AuthProvider>
-      {!splashDone && <SplashScreen onComplete={() => setSplashDone(true)} />}
-      <BrowserRouter>
-        <AppLayout />
-      </BrowserRouter>
+      <AppWithSplash />
     </AuthProvider>
   );
 }

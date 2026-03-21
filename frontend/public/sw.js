@@ -23,6 +23,9 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
 
+  // http/https 외 스킴(chrome-extension 등)은 무시
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
+
   // API, WebSocket은 캐시하지 않음
   if (url.pathname.startsWith("/api") || url.protocol === "ws:" || url.protocol === "wss:") {
     return;

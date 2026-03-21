@@ -53,7 +53,7 @@ function SectionTitle({ title, action, onAction }) {
 }
 
 // 인기 종목 섹션 (탭 + 리스트)
-function PopularSection({ isMobile, isPC, navigate }) {
+function PopularSection({ isMobile, isPC, navigate, onMaintenance }) {
   const [activeTab, setActiveTab] = useState("view");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +64,10 @@ function PopularSection({ isMobile, isPC, navigate }) {
     setExpanded(false);
     getRanking(activeTab)
       .then(setItems)
-      .catch(() => setItems([]))
+      .catch((e) => {
+        if (e.maintenance) onMaintenance?.();
+        setItems([]);
+      })
       .finally(() => setLoading(false));
   }, [activeTab]);
 
@@ -277,12 +280,60 @@ function AddStockSheet({ onClose, onAdd }) {
 
 // ── 메인 컴포넌트 ────────────────────────────────────────────────────
 
+function MaintenanceModal({ errors, onClose }) {
+  const hasKiwoom = errors.includes("kiwoom");
+  const hasKis    = errors.includes("kis");
+  const both      = hasKiwoom && hasKis;
+
+  const title = both ? "서비스 점검 중"
+              : hasKiwoom ? "국내주식 연결 불가"
+              : "해외주식 연결 불가";
+
+  const desc = both
+    ? "현재 서버 점검 중으로\n국내·해외 주식 데이터가 표시되지 않을 수 있습니다."
+    : hasKiwoom
+    ? "현재 서버 점검 중으로\n국내 주식 및 국내 지수 데이터가 표시되지 않을 수 있습니다."
+    : "현재 서버 점검 중으로\n해외 주식 데이터가 표시되지 않을 수 있습니다.";
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9000,
+      background: "rgba(0,0,0,0.45)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 24,
+    }} onClick={onClose}>
+      <div style={{
+        background: "var(--color-background-primary)",
+        borderRadius: 20, padding: "32px 28px",
+        maxWidth: 340, width: "100%",
+        textAlign: "center",
+        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+      }} onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ margin: "0 0 10px", fontSize: 20, fontWeight: 800, color: "var(--color-text-primary)" }}>
+          {title}
+        </h2>
+        <p style={{ margin: "0 0 24px", fontSize: 14, color: "var(--color-text-secondary)", lineHeight: 1.7, whiteSpace: "pre-line" }}>
+          {desc}
+        </p>
+        <button onClick={onClose} style={{
+          width: "100%", height: 46, borderRadius: 12, border: "none",
+          background: "var(--color-background-tertiary)",
+          color: "var(--color-text-primary)", fontSize: 15, fontWeight: 700, cursor: "pointer",
+        }}>
+          확인
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
   const isPC     = bp === "pc";
   const { user } = useAuth();
+  const [apiErrors, setApiErrors] = useState([]); // 'kiwoom' | 'kis'
   const [watchlist,   setWatchlist]   = useState([]);
   const [stockMeta,   setStockMeta]   = useState({});
   const [showAddSheet, setShowAddSheet] = useState(false);
@@ -296,9 +347,11 @@ export default function Home() {
   // 지수 + 환율 로드 → 통합 marketData
   useEffect(() => {
     Promise.all([
-      getIndices().catch(() => []),
+      getIndices().catch(() => ({ data: [], errors: [] })),
       getFX().catch(() => []),
-    ]).then(([indicesData, fxData]) => {
+    ]).then(([indicesResult, fxData]) => {
+      const { data: indicesData, errors } = indicesResult;
+      if (errors.length > 0) setApiErrors(errors);
       const merged = {};
       indicesData.forEach((idx) => {
         merged[idx.name] = { value: idx.value, change_pct: idx.change_pct };
@@ -438,6 +491,7 @@ export default function Home() {
 
   return (
     <div style={{ maxWidth: isPC ? 1200 : "100%", margin: "0 auto", padding: isPC ? "0 40px 40px" : "0 0 40px" }}>
+      {apiErrors.length > 0 && <MaintenanceModal errors={apiErrors} onClose={() => setApiErrors([])} />}
 
       {/* ── 2열 그리드 (PC) / 단열 (모바일) ── */}
       <div style={isPC ? { display: "grid", gridTemplateColumns: "1fr 380px", gap: 32, paddingTop: 24 } : {}}>
@@ -486,7 +540,7 @@ export default function Home() {
           </section>
 
           {/* 인기 종목 */}
-          <PopularSection isMobile={isMobile} isPC={isPC} navigate={navigate} />
+          <PopularSection isMobile={isMobile} isPC={isPC} navigate={navigate} onMaintenance={() => setApiErrors((prev) => prev.includes("kiwoom") ? prev : [...prev, "kiwoom"])} />
 
           {/* 모바일·태블릿: 관심종목 */}
           {!isPC && (

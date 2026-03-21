@@ -3,7 +3,6 @@ import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const { loginWithKakao } = useAuth();
-  const isMobile = window.innerWidth < 768;
   const [showButton, setShowButton] = useState(false);
 
   useEffect(() => {
@@ -12,45 +11,16 @@ export default function Login() {
   }, []);
 
   return (
-    <div className="splash-bg" style={{
-      position: "fixed", inset: 0, zIndex: 9999,
-      display: "flex", flexDirection: "column",
-      alignItems: "center",
-    }}>
-      <div style={{
-        flex: 1,
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        paddingTop: isMobile ? "20vh" : 0,
-        paddingBottom: isMobile ? "0" : 0,
-        width: "100%",
-      }}>
-        {/* 타이틀 + 문구 (항상 노출) */}
-        <div style={{
-          textAlign: "center",
-          animation: "splashIn 0.4s ease forwards",
-        }}>
-          <h1 style={{
-            margin: 0, fontSize: 34, fontWeight: 800,
-            color: "#111827", letterSpacing: "-0.5px",
-          }}>
-            오늘 날이가
-          </h1>
-          <p style={{
-            margin: "12px 0 0", fontSize: 18,
-            color: "#6b7280", fontWeight: 400,
-          }}>
-            오늘 하루도 건승하세요!
-          </p>
-        </div>
+    <div className="splash-bg login-container">
+      <div className="login-box">
+        <img src="/logo.png" alt="로고" className="login-logo" />
+        <h1 className="login-title">오늘 날이가</h1>
+        <p className="login-subtitle">오늘 하루도 건승하세요!</p>
 
-        {/* 카카오 버튼 → 스르륵 아래에서 등장 */}
-        <div style={{
-          marginTop: 40,
+        <div className="login-btn-wrap" style={{
           opacity: showButton ? 1 : 0,
           transform: showButton ? "translateY(0)" : "translateY(24px)",
           transition: "opacity 0.6s ease, transform 0.6s ease",
-          width: isMobile ? "80%" : "320px",
         }}>
           <button
             onClick={loginWithKakao}
@@ -70,26 +40,6 @@ export default function Login() {
           </button>
         </div>
       </div>
-
-      {/* 하단: splash_logo 이미지 (모바일만) */}
-      {isMobile && (
-        <div style={{
-          height: "52vh", width: "100%",
-          flexShrink: 0, overflow: "hidden",
-        }}>
-          <img
-            src="/splash_logo.png"
-            alt=""
-            style={{
-              width: "100%", height: "100%",
-              objectFit: "cover", objectPosition: "center top",
-              display: "block",
-              maskImage: "linear-gradient(to bottom, transparent 0%, black 30%)",
-              WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 30%)",
-            }}
-          />
-        </div>
-      )}
     </div>
   );
 }

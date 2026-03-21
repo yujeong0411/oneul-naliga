@@ -4,12 +4,16 @@ from pydantic import BaseModel
 import httpx
 
 from app.services import kiwoom, kis
+from app.services.kiwoom import KiwoomMaintenanceError
 from app.services.peak_detector import find_peaks, find_valleys
 from app.database import get_supabase
 from app.config import settings
 from app.data.stock_list import search_stocks
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
+
+# 마지막 성공 데이터 캐시 (장외시간 폴백용)
+_cache: dict = {}
 
 
 # ─────────────────────────────────────────
@@ -30,9 +34,20 @@ async def search(q: str = Query(default="", min_length=1)):
 @router.get("/ranking")
 async def get_ranking(type: str = Query(default="view")):
     """인기종목 랭킹 조회 (type: view|volume|amount|surge|rise|fall|foreign|institution|etf)"""
+    cache_key = f"ranking_{type}"
     try:
-        return await kiwoom.get_ranking(type)
+        data = await kiwoom.get_ranking(type)
+        _cache[cache_key] = data
+        return data
+    except KiwoomMaintenanceError as e:
+        if cache_key in _cache:
+            print(f"[ranking] 🔧 점검 중 → 캐시 반환")
+            return _cache[cache_key]
+        raise HTTPException(status_code=503, detail="키움 API 점검 중입니다.")
     except Exception as e:
+        if cache_key in _cache:
+            print(f"[ranking] API 실패 → 캐시 반환: {e}")
+            return _cache[cache_key]
         raise HTTPException(status_code=502, detail=str(e))
 
 
@@ -40,22 +55,45 @@ async def get_ranking(type: str = Query(default="view")):
 async def get_indices():
     """KOSPI / KOSDAQ + 미국 지수 조회"""
     results = []
-    # 국내 지수
+    errors = []  # 실패한 서비스 목록
+    kr_ok = False
+
+    # 국내 지수 (키움)
     try:
         kr = await kiwoom.get_indices()
         results.extend(kr)
+        kr_ok = True
+    except KiwoomMaintenanceError:
+        print(f"[indices] 🔧 키움 점검 중 → 캐시 반환")
+        errors.append("kiwoom")
+        if "indices_kr" in _cache:
+            results.extend(_cache["indices_kr"])
     except Exception as e:
-        print(f"[indices] 국내 지수 조회 실패: {e}")
+        print(f"[indices] 키움 국내 지수 조회 실패: {e}")
+        errors.append("kiwoom")
+        if "indices_kr" in _cache:
+            results.extend(_cache["indices_kr"])
 
-    # 미국 지수 (KIS 키가 있을 때만)
+    # 미국 지수 (KIS)
+    us_ok = False
     if settings.kis_app_key and settings.kis_app_secret:
         try:
             us = await kis.get_us_indices()
             results.extend(us)
+            us_ok = True
         except Exception as e:
-            print(f"[indices] 미국 지수 조회 실패: {e}")
+            print(f"[indices] KIS 미국 지수 조회 실패: {e}")
+            errors.append("kis")
+            if "indices_us" in _cache:
+                results.extend(_cache["indices_us"])
 
-    return results
+    # 성공한 데이터만 캐시 갱신
+    if kr_ok:
+        _cache["indices_kr"] = [r for r in results if r.get("name") in ("KOSPI", "KOSDAQ")]
+    if us_ok:
+        _cache["indices_us"] = [r for r in results if r.get("name") not in ("KOSPI", "KOSDAQ")]
+
+    return {"data": results, "errors": errors}
 
 
 _fx_cache: dict = {"data": None, "expires_at": 0.0}

@@ -31,7 +31,10 @@
       "Bash(\"C:\\\\Users\\\\choiy\\\\Desktop\\\\oneul-naliga\\\\backend\\\\.venv\\\\Scripts\\\\python.exe\" -c \"\nimport openpyxl, sys, io\nsys.stdout = io.TextIOWrapper\\(sys.stdout.buffer, encoding='utf-8'\\)\n\npath = r'C:\\\\Users\\\\choiy\\\\Desktop\\\\oneul-naliga\\\\한국투자증권_Hashkey.xlsx'\nwb = openpyxl.load_workbook\\(path\\)\nfor sheet_name in wb.sheetnames:\n    ws = wb[sheet_name]\n    print\\(f'=== Sheet: {sheet_name} \\(rows={ws.max_row}, cols={ws.max_column}\\) ==='\\)\n    for row in ws.iter_rows\\(min_row=1, max_row=ws.max_row, max_col=ws.max_column, values_only=False\\):\n        vals = []\n        for cell in row:\n            v = cell.value\n            if v is not None:\n                vals.append\\(f'[{cell.coordinate}] {v}'\\)\n        if vals:\n            print\\(' | '.join\\(vals\\)\\)\n    print\\(\\)\n\" 2>/dev/null)",
       "Bash(curl -s http://localhost:8000/api/stocks/search?q=삼성)",
       "Bash(\"C:\\\\Users\\\\choiy\\\\Desktop\\\\oneul-naliga\\\\backend\\\\.venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\choiy\\\\Desktop\\\\oneul-naliga\\\\backend\\\\scripts\\\\upload_stocks.py\")",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(find C:/oneul-naliga -type f \\\\\\(-name *.sql -o -name migrations* -o -name schema* \\\\\\))",
+      "Bash(find C:/oneul-naliga -type f -name *.md -o -name *.txt)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

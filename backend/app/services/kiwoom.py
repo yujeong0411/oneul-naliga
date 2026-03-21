@@ -9,6 +9,11 @@ from datetime import datetime
 from app.config import settings
 from app.models.stock import StockCandle
 
+
+class KiwoomMaintenanceError(Exception):
+    """키움 API 점검/장외시간으로 인한 접근 불가"""
+    pass
+
 BASE_URL = "https://api.kiwoom.com"
 
 _token_cache: dict = {}
@@ -21,7 +26,7 @@ async def get_access_token() -> str:
     if _token_cache.get("token") and _token_cache.get("expires_at", 0) > now + 60:
         return _token_cache["token"]
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(follow_redirects=False) as client:
         resp = await client.post(
             f"{BASE_URL}/oauth2/token",
             headers={"Content-Type": "application/json;charset=UTF-8"},
@@ -31,6 +36,10 @@ async def get_access_token() -> str:
                 "secretkey": settings.kiwoom_app_secret,
             },
         )
+        if resp.status_code in (301, 302, 303, 307, 308):
+            location = resp.headers.get("location", "")
+            print(f"[kiwoom] 🔧 서버 점검 중 (302 redirect → {location})")
+            raise KiwoomMaintenanceError(f"키움 API 점검 중: {location}")
         resp.raise_for_status()
         data = resp.json()
 
