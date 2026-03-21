@@ -43,15 +43,17 @@ function calcMA(candles, period) {
     .filter(Boolean);
 }
 
-function toChartTime(dateStr, isIntraday) {
+function toChartTime(dateStr, isIntraday, isOverseas = false) {
   if (isIntraday) {
-    // "20250917132000" (14자리, YYYYMMDDHHmmss) → Unix timestamp (KST)
     const y = dateStr.slice(0, 4);
     const mo = dateStr.slice(4, 6);
     const d = dateStr.slice(6, 8);
     const h = dateStr.slice(8, 10);
     const m = dateStr.slice(10, 12);
-    return Math.floor(new Date(`${y}-${mo}-${d}T${h}:${m}:00+09:00`).getTime() / 1000);
+    // 해외: KIS가 EST(-05:00) 기준으로 반환 → KST로 브라우저가 변환
+    // 국내: KST(+09:00)
+    const tz = isOverseas ? "-05:00" : "+09:00";
+    return Math.floor(new Date(`${y}-${mo}-${d}T${h}:${m}:00${tz}`).getTime() / 1000);
   }
   // "20241101" → "2024-11-01"
   return dateStr.replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3");
@@ -109,7 +111,7 @@ export default function ChartDetail() {
     getCandles(market, code, timeframe, count, exchange)
       .then((data) => {
         const chartData = (data.candles ?? []).reverse().map((c) => ({
-          time: toChartTime(c.date, isIntraday),
+          time: toChartTime(c.date, isIntraday, market === "US"),
           open: c.open,
           high: c.high,
           low: c.low,
@@ -194,8 +196,9 @@ export default function ChartDetail() {
     const lastTime = candles[candles.length - 1].time;
     let fromTime;
     if (isIntraday) {
-      // Unix timestamp(초) — 1거래일(6.5시간) 이전
-      fromTime = lastTime - 6.5 * 60 * 60;
+      // 분봉 × 6배 범위 표시
+      const minuteVal = parseInt(timeframe);
+      fromTime = lastTime - minuteVal * 6 * 60;
     } else {
       const d = new Date(lastTime);
       if (timeframe === "주봉") d.setMonth(d.getMonth() - 1);
