@@ -30,6 +30,7 @@ class LineCreate(BaseModel):
     # 수평선용
     price: Optional[float] = None
 
+    color: Optional[str] = None  # 사용자 지정 색상 (hex)
     sensitivity: float = 0.5  # 알림 민감도 (±%)
     user_id: Optional[str] = None
 
@@ -37,5 +38,6 @@ class LineCreate(BaseModel):
 class LineUpdate(BaseModel):
     """선 수정 요청 모델 (부분 업데이트)"""
     name: Optional[str] = None
+    color: Optional[str] = None
     sensitivity: Optional[float] = None
     is_active: Optional[bool] = None

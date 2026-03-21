@@ -5,6 +5,7 @@ import AuthCallback from "./pages/AuthCallback";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import ChartDetail from "./pages/ChartDetail";
+import IndexDetail from "./pages/IndexDetail";
 import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
 import SplashScreen from "./components/SplashScreen";
@@ -67,53 +68,54 @@ function MobileHeader() {
       backdropFilter: "blur(20px) saturate(180%)",
       WebkitBackdropFilter: "blur(20px) saturate(180%)",
       borderBottom: "1px solid var(--header-border)",
-      height: 52, padding: "0 20px",
-      display: "flex", alignItems: "center", justifyContent: "space-between",
+      paddingTop: "env(safe-area-inset-top, 0px)",
     }}>
-      <div onClick={() => navigate("/")} style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
-        <img src="/logo.png" alt="logo" style={{ width: 30, height: 30, borderRadius: 8 }} />
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        {/* 검색 */}
-        <button onClick={() => setShowSearch(true)} style={{ border: "none", background: "none", cursor: "pointer", padding: 6, lineHeight: 0, color: "var(--color-text-tertiary)" }}>
-          <Icon d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" size={20} />
-        </button>
-        {/* 알림 */}
-        <button onClick={() => navigate("/alerts")} style={{
-          border: "none", background: location.pathname === "/alerts" ? "var(--color-background-tertiary)" : "none",
-          cursor: "pointer", padding: 6, borderRadius: 8, lineHeight: 0,
-          color: location.pathname === "/alerts" ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
-          position: "relative",
-        }}>
-          <Icon d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" size={20} />
-          {alertCount > 0 && (
-            <span style={{
-              position: "absolute", top: 2, right: 2,
-              minWidth: 14, height: 14, borderRadius: 7,
-              background: "var(--color-text-danger)", color: "#fff",
-              fontSize: 9, fontWeight: 700,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              padding: "0 3px",
-            }}>
-              {alertCount > 99 ? "99+" : alertCount}
-            </span>
-          )}
-        </button>
-        {/* 다크모드 */}
-        <button onClick={toggleDark} style={{ border: "none", background: "none", cursor: "pointer", padding: 6, lineHeight: 0, color: "var(--color-text-tertiary)" }}>
-          {dark
-            ? <Icon d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" size={20} />
-            : <Icon d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" size={20} />
-          }
-        </button>
-        {/* 마이페이지 */}
-        <button onClick={() => navigate("/settings")} style={{
-          border: "none", background: location.pathname === "/settings" ? "var(--color-background-tertiary)" : "none",
-          cursor: "pointer", padding: 6, borderRadius: 8, lineHeight: 0,
-          color: location.pathname === "/settings" ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
-        }}>
-          <Icon d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" d2="M12 3a4 4 0 100 8 4 4 0 000-8z" size={20} />
-        </button>
+      <div style={{ height: 52, padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div onClick={() => navigate("/")} style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+          <img src="/logo.png" alt="logo" style={{ width: 30, height: 30, borderRadius: 8 }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {/* 검색 */}
+          <button onClick={() => setShowSearch(true)} style={{ border: "none", background: "none", cursor: "pointer", padding: 6, lineHeight: 0, color: "var(--color-text-tertiary)" }}>
+            <Icon d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" size={20} />
+          </button>
+          {/* 알림 */}
+          <button onClick={() => navigate("/alerts")} style={{
+            border: "none", background: location.pathname === "/alerts" ? "var(--color-background-tertiary)" : "none",
+            cursor: "pointer", padding: 6, borderRadius: 8, lineHeight: 0,
+            color: location.pathname === "/alerts" ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
+            position: "relative",
+          }}>
+            <Icon d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" size={20} />
+            {alertCount > 0 && (
+              <span style={{
+                position: "absolute", top: 2, right: 2,
+                minWidth: 14, height: 14, borderRadius: 7,
+                background: "var(--color-text-danger)", color: "#fff",
+                fontSize: 9, fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: "0 3px",
+              }}>
+                {alertCount > 99 ? "99+" : alertCount}
+              </span>
+            )}
+          </button>
+          {/* 다크모드 */}
+          <button onClick={toggleDark} style={{ border: "none", background: "none", cursor: "pointer", padding: 6, lineHeight: 0, color: "var(--color-text-tertiary)" }}>
+            {dark
+              ? <Icon d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" size={20} />
+              : <Icon d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" size={20} />
+            }
+          </button>
+          {/* 마이페이지 */}
+          <button onClick={() => navigate("/settings")} style={{
+            border: "none", background: location.pathname === "/settings" ? "var(--color-background-tertiary)" : "none",
+            cursor: "pointer", padding: 6, borderRadius: 8, lineHeight: 0,
+            color: location.pathname === "/settings" ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
+          }}>
+            <Icon d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" d2="M12 3a4 4 0 100 8 4 4 0 000-8z" size={20} />
+          </button>
+        </div>
       </div>
     </header>
 
@@ -260,6 +262,7 @@ function AppLayout() {
         <Routes>
           <Route path="/"              element={<Home />} />
           <Route path="/chart/:code"   element={<ChartDetail />} />
+          <Route path="/index/:id"     element={<IndexDetail />} />
           <Route path="/alerts"        element={<Alerts />} />
           <Route path="/settings"      element={<Settings />} />
           <Route path="/auth/callback" element={<AuthCallback />} />

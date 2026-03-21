@@ -58,16 +58,44 @@ def search_stocks(query: str, limit: int = 10, include_us: bool = False) -> list
                 .data
             )
 
+        _excd_map = {"NASDAQ": "NAS", "NYSE": "NYS", "AMEX": "AMS"}
+
         for item in name_results + code_results + full_name_results:
             if item["code"] not in seen:
                 seen.add(item["code"])
-                market_label = "해외" if item["market"] in ("NASDAQ", "NYSE", "AMEX") else "국내"
-                results.append({
+                is_us = item["market"] in ("NASDAQ", "NYSE", "AMEX")
+                market_label = "해외" if is_us else "국내"
+                entry = {
                     "code": item["code"],
                     "name": item["name"],
                     "market": market_label,
-                })
+                }
+                if is_us:
+                    entry["exchange"] = _excd_map.get(item["market"], "NAS")
+                results.append(entry)
     except Exception as e:
         print(f"[stock_list] DB 검색 실패: {e}")
 
     return results[:limit]
+
+
+_EXCD_MAP = {"NASDAQ": "NAS", "NYSE": "NYS", "AMEX": "AMS"}
+
+
+def get_exchanges(codes: list[str]) -> dict[str, str]:
+    """코드 목록으로 거래소 코드 조회: {code: "NAS"|"NYS"|"AMS"}"""
+    if not codes:
+        return {}
+    try:
+        db = get_supabase()
+        rows = (
+            db.table("stock_list")
+            .select("code, market")
+            .in_("code", codes)
+            .in_("market", ["NASDAQ", "NYSE", "AMEX"])
+            .execute()
+            .data
+        )
+        return {r["code"]: _EXCD_MAP.get(r["market"], "NAS") for r in rows}
+    except Exception:
+        return {}

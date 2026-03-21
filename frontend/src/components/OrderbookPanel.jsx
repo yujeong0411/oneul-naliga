@@ -10,21 +10,21 @@ const B = "var(--border-tertiary)";
  * - WebSocket으로 실시간 업데이트
  * - 잔량이 큰 가격대 하이라이트 (평균 3배 이상)
  */
-export default function OrderbookPanel({ market, code, onSaveSupportResistance }) {
+export default function OrderbookPanel({ market, code, exchange = "NAS", onSaveSupportResistance }) {
   const isDomestic = /^\d{6}$/.test(code);
 
   // REST 초기 데이터
   const [initialData, setInitialData] = useState(null);
 
   useEffect(() => {
-    if (!isDomestic) return;
-    getOrderbook(market, code)
+    getOrderbook(market, code, isDomestic ? undefined : exchange)
       .then((data) => setInitialData(data))
       .catch(() => {});
-  }, [market, code, isDomestic]);
+  }, [market, code, exchange]);
 
   // WebSocket 실시간 데이터
-  const live = useOrderbook(isDomestic ? code : null);
+  const live = useOrderbook(code, exchange);
+  const marketClosed = live.marketClosed;
 
   // 실시간 데이터가 있으면 사용, 없으면 REST 데이터
   const asks = live.asks.length > 0 ? live.asks : initialData?.asks || [];
@@ -52,18 +52,17 @@ export default function OrderbookPanel({ market, code, onSaveSupportResistance }
 
   const supportResistance = live.supportResistance?.length > 0 ? live.supportResistance : restSR;
 
-  if (!isDomestic) {
-    return (
-      <div style={{ padding: "24px 20px", textAlign: "center", fontSize: 13, color: "var(--color-text-tertiary)" }}>
-        해외 종목은 호가를 지원하지 않습니다
-      </div>
-    );
-  }
-
   if (asks.length === 0 && bids.length === 0) {
     return (
-      <div style={{ padding: "24px 20px", textAlign: "center", fontSize: 13, color: "var(--color-text-tertiary)" }}>
-        호가 데이터를 불러오는 중...
+      <div style={{ padding: "28px 20px", textAlign: "center" }}>
+        {marketClosed ? (
+          <>
+            <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 600, color: "var(--color-text-secondary)" }}>장 마감</p>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-tertiary)" }}>실시간 호가는 평일 08:30 ~ 15:40에 제공됩니다</p>
+          </>
+        ) : (
+          <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-tertiary)" }}>호가 데이터를 불러오는 중...</p>
+        )}
       </div>
     );
   }

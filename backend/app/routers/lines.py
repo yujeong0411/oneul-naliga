@@ -10,7 +10,13 @@ router = APIRouter(prefix="/lines", tags=["lines"])
 async def create_line(line: LineCreate):
     """선 저장 (추세선 / 수평선 공통)"""
     db = get_supabase()
-    result = db.table("lines").insert(line.model_dump()).execute()
+    data = {k: v for k, v in line.model_dump().items() if v is not None}
+    try:
+        result = db.table("lines").insert(data).execute()
+    except Exception:
+        # color 컬럼이 없는 경우 색상 제외 후 재시도
+        data.pop("color", None)
+        result = db.table("lines").insert(data).execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="선 저장 실패")
     return result.data[0]

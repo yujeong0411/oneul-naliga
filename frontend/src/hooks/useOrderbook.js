@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
-const WS_BASE = `${WS_URL}/ws/orderbook`;
+
+const isDomestic = (code) => /^\d{6}$/.test(code);
 
 /**
  * 실시간 호가 훅
- * @param {string} code - 종목 코드 (국내 6자리만 지원)
- * @returns {{ asks, bids, total_ask_qty, total_bid_qty, supportResistance }}
+ * @param {string} code - 종목 코드
+ * @param {string} [exchange] - 해외 종목 거래소 코드 (NAS, NYS, AMS 등)
+ * @returns {{ asks, bids, total_ask_qty, total_bid_qty, supportResistance, marketClosed }}
  */
-export function useOrderbook(code) {
+export function useOrderbook(code, exchange = "NAS") {
   const [orderbook, setOrderbook] = useState({
     asks: [],
     bids: [],
@@ -16,18 +18,32 @@ export function useOrderbook(code) {
     total_bid_qty: 0,
   });
   const [supportResistance, setSupportResistance] = useState([]);
+  const [marketClosed, setMarketClosed] = useState(false);
   const wsRef = useRef(null);
 
   useEffect(() => {
-    if (!code || !/^\d{6}$/.test(code)) return;
+    if (!code) return;
 
-    const url = `${WS_BASE}?codes=${code}`;
+    let url;
+    if (isDomestic(code)) {
+      url = `${WS_URL}/ws/orderbook?codes=${code}`;
+    } else {
+      url = `${WS_URL}/ws/us_orderbook?codes=${exchange}:${code}`;
+    }
+
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
+
+        // 장외시간 알림 (국내 전용)
+        if (data.market_closed) {
+          setMarketClosed(true);
+          return;
+        }
+
         if (data.code !== code) return;
 
         const ob = {
@@ -37,6 +53,7 @@ export function useOrderbook(code) {
           total_bid_qty: data.total_bid_qty || 0,
         };
         setOrderbook(ob);
+        setMarketClosed(false);
 
         // 잔량 분석: 평균의 3배 이상인 가격대 탐지
         const allEntries = [...ob.asks, ...ob.bids];
@@ -66,7 +83,7 @@ export function useOrderbook(code) {
       ws.close();
       wsRef.current = null;
     };
-  }, [code]);
+  }, [code, exchange]); // eslint-disable-line
 
-  return { ...orderbook, supportResistance };
+  return { ...orderbook, supportResistance, marketClosed };
 }

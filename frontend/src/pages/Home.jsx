@@ -12,7 +12,7 @@ function useBreakpoint() {
   }, []);
   return bp;
 }
-import { getWatchlist, addStock, removeStock, getPrice, detectMarket, searchStocks, getRanking, getIndices, getFX } from "../api/stocks";
+import { getWatchlist, addStock, removeStock, getPrice, detectMarket, searchStocks, getRanking, getOverseasRanking, getIndices, getFX } from "../api/stocks";
 import { MARKET_ITEMS, loadMarketSettings, saveMarketSettings } from "../config/marketItems";
 import { getLines } from "../api/lines";
 import { useAuth } from "../context/AuthContext";
@@ -29,11 +29,26 @@ const RANKING_TABS = [
   { type: "etf",         label: "ETF" },
 ];
 
+const OVERSEAS_TABS = [
+  { type: "rise",      label: "상승" },
+  { type: "fall",      label: "하락" },
+  { type: "volume",    label: "거래량" },
+  { type: "amount",    label: "거래대금" },
+  { type: "marketcap", label: "시총" },
+];
+
+const EXCHANGES = [
+  { value: "ALL", label: "전체" },
+  { value: "NAS", label: "나스닥" },
+  { value: "NYS", label: "뉴욕" },
+  { value: "AMS", label: "아멕스" },
+];
+
 const B = "1px solid var(--color-border-tertiary)";
 
 function ChangeText({ change, style }) {
   return (
-    <span style={{ fontSize: 12, fontWeight: 500, color: change >= 0 ? "var(--color-text-success)" : "var(--color-text-danger)", ...style }}>
+    <span style={{ fontSize: 12, fontWeight: 500, color: change >= 0 ? "var(--color-rise)" : "var(--color-fall)", ...style }}>
       {change >= 0 ? "+" : ""}{change}%
     </span>
   );
@@ -52,57 +67,134 @@ function SectionTitle({ title, action, onAction }) {
   );
 }
 
-// 인기 종목 섹션 (탭 + 리스트)
+// 랭킹 아이템 행
+function RankItem({ item, i, onClick, isOverseas }) {
+  const changeColor = (pct) => {
+    if (!pct) return "var(--color-text-tertiary)";
+    return String(pct).startsWith("-") ? "var(--color-fall)" : "var(--color-rise)";
+  };
+  const priceFmt = (price) => {
+    if (price == null || price === 0) return "—";
+    return isOverseas ? `$${Number(price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : price.toLocaleString() + "원";
+  };
+  return (
+    <div onClick={onClick} style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: B, cursor: "pointer", gap: 10 }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: i < 3 ? "var(--color-text-primary)" : "var(--color-text-tertiary)", minWidth: 20, textAlign: "center" }}>
+        {item.rank}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</p>
+        <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-tertiary)" }}>{item.code}</p>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{priceFmt(item.price)}</p>
+        {item.change_pct && (
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: changeColor(item.change_pct) }}>{item.change_pct}%</p>
+        )}
+        {item.extra && (
+          <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-tertiary)" }}>{item.extra}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 인기 종목 섹션 (국내 / 해외 탭)
 function PopularSection({ isMobile, isPC, navigate, onMaintenance }) {
+  const [market, setMarket] = useState(() => localStorage.getItem("popular_market") || "domestic");
   const [activeTab, setActiveTab] = useState("view");
+  const [overseasTab, setOverseasTab] = useState("rise");
+  const [exchange, setExchange] = useState("ALL");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
+  // 국내 랭킹
   useEffect(() => {
-    setLoading(true);
-    setExpanded(false);
+    if (market !== "domestic") return;
+    setLoading(true); setExpanded(false);
     getRanking(activeTab)
       .then(setItems)
-      .catch((e) => {
-        if (e.maintenance) onMaintenance?.();
-        setItems([]);
-      })
+      .catch((e) => { if (e.maintenance) onMaintenance?.(); setItems([]); })
       .finally(() => setLoading(false));
-  }, [activeTab]);
+  }, [market, activeTab]);
 
-  const priceFmt = (price) => {
-    if (price == null || price === 0) return "—";
-    return price.toLocaleString() + "원";
-  };
-
-  const changeColor = (pct) => {
-    if (!pct) return "var(--color-text-tertiary)";
-    return pct.startsWith("-") ? "var(--color-text-danger)" : "var(--color-text-success)";
-  };
+  // 해외 랭킹
+  useEffect(() => {
+    if (market !== "overseas") return;
+    setLoading(true); setExpanded(false);
+    getOverseasRanking(overseasTab, exchange)
+      .then(setItems)
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [market, overseasTab, exchange]);
 
   const pad = isMobile ? "0 20px" : isPC ? "0" : "0 24px";
+  const padH = isMobile ? "0 20px 10px" : isPC ? "0 0 10px" : "0 24px 10px";
 
   return (
     <section style={{ paddingTop: 20 }}>
-      <div style={{ padding: pad }}>
-        <SectionTitle title="인기 종목" />
+      <div style={{ padding: pad, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 17, fontWeight: 800, color: "var(--color-text-primary)", letterSpacing: "-0.4px" }}>주식 순위</span>
+        <button onClick={() => { setMarket((v) => { const next = v === "domestic" ? "overseas" : "domestic"; localStorage.setItem("popular_market", next); return next; }); setItems([]); }}
+          style={{
+            padding: "6px 0", fontSize: 12, borderRadius: 20, border: "none",
+            fontWeight: 700, cursor: "pointer",
+            background: "none", display: "flex", alignItems: "center", gap: 0,
+          }}>
+          <span style={{
+            padding: "5px 12px", borderRadius: "20px 0 0 20px",
+            background: market === "domestic" ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
+            color: market === "domestic" ? "var(--color-background-primary)" : "var(--color-text-tertiary)",
+          }}>국내</span>
+          <span style={{
+            padding: "5px 12px", borderRadius: "0 20px 20px 0",
+            background: market === "overseas" ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
+            color: market === "overseas" ? "var(--color-background-primary)" : "var(--color-text-tertiary)",
+          }}>해외</span>
+        </button>
       </div>
 
-      {/* 탭 */}
-      <div className="hide-scrollbar" style={{ display: "flex", gap: 6, overflowX: "auto", padding: isMobile ? "0 20px 10px" : isPC ? "0 0 10px" : "0 24px 10px" }}>
-        {RANKING_TABS.map(({ type, label }) => (
-          <button key={type} onClick={() => setActiveTab(type)}
-            style={{
-              flexShrink: 0, padding: "6px 14px", fontSize: 12, borderRadius: 20, border: "none",
-              fontWeight: activeTab === type ? 600 : 400, cursor: "pointer",
-              background: activeTab === type ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
-              color: activeTab === type ? "var(--color-background-primary)" : "var(--color-text-secondary)",
-            }}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* 세부 탭 */}
+      {market === "domestic" ? (
+        <div className="hide-scrollbar" style={{ display: "flex", gap: 6, overflowX: "auto", padding: padH }}>
+          {RANKING_TABS.map(({ type, label }) => (
+            <button key={type} onClick={() => setActiveTab(type)}
+              style={{
+                flexShrink: 0, padding: "6px 14px", fontSize: 12, borderRadius: 20, border: "none",
+                fontWeight: activeTab === type ? 600 : 400, cursor: "pointer",
+                background: activeTab === type ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
+                color: activeTab === type ? "var(--color-background-primary)" : "var(--color-text-secondary)",
+              }}>{label}</button>
+          ))}
+        </div>
+      ) : (
+        <div style={{ padding: padH }}>
+          <div className="hide-scrollbar" style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 8 }}>
+            {OVERSEAS_TABS.map(({ type, label }) => (
+              <button key={type} onClick={() => setOverseasTab(type)}
+                style={{
+                  flexShrink: 0, padding: "6px 14px", fontSize: 12, borderRadius: 20, border: "none",
+                  fontWeight: overseasTab === type ? 600 : 400, cursor: "pointer",
+                  background: overseasTab === type ? "var(--color-text-primary)" : "var(--color-background-tertiary)",
+                  color: overseasTab === type ? "var(--color-background-primary)" : "var(--color-text-secondary)",
+                }}>{label}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {EXCHANGES.map(({ value, label }) => (
+              <button key={value} onClick={() => setExchange(value)}
+                style={{
+                  padding: "4px 12px", fontSize: 11, borderRadius: 8, border: "1px solid",
+                  borderColor: exchange === value ? "var(--color-text-primary)" : "var(--color-border-tertiary)",
+                  fontWeight: exchange === value ? 700 : 400, cursor: "pointer",
+                  background: "transparent",
+                  color: exchange === value ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
+                }}>{label}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 리스트 */}
       <div style={{ background: "var(--color-background-primary)", borderRadius: 16, overflow: "hidden", margin: isMobile ? "0 20px" : isPC ? "0" : "0 24px", boxShadow: "var(--shadow-card)" }}>
@@ -113,25 +205,9 @@ function PopularSection({ isMobile, isPC, navigate, onMaintenance }) {
         ) : (
           <>
             {(expanded ? items : items.slice(0, 5)).map((item, i) => (
-              <div key={item.code + i} onClick={() => navigate(`/chart/${item.code}`, { state: { name: item.name } })}
-                style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: B, cursor: "pointer", gap: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: i < 3 ? "var(--color-text-primary)" : "var(--color-text-tertiary)", minWidth: 20, textAlign: "center" }}>
-                  {item.rank}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-tertiary)" }}>{item.code}</p>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{priceFmt(item.price)}</p>
-                  {item.change_pct && (
-                    <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: changeColor(item.change_pct) }}>{item.change_pct}%</p>
-                  )}
-                  {item.extra && (
-                    <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-tertiary)" }}>{item.extra}</p>
-                  )}
-                </div>
-              </div>
+              <RankItem key={item.code + i} item={item} i={i} isOverseas={market === "overseas"}
+                onClick={() => navigate(`/chart/${item.code}`, { state: { name: item.name, market: market === "overseas" ? "US" : "KOSPI", exchange: item.exchange } })}
+              />
             ))}
             {items.length > 5 && (
               <button onClick={() => setExpanded((v) => !v)}
@@ -153,6 +229,24 @@ function AddStockSheet({ onClose, onAdd }) {
   const [selected, setSelected] = useState(null); // { code, name, market }
   const [loading,  setLoading]  = useState(false);
   const timerRef = useRef(null);
+  const sheetRef = useRef(null);
+  const startY = useRef(0);
+  const onTouchStart = (e) => { startY.current = e.touches[0].clientY; };
+  const onTouchMove = (e) => {
+    const dy = e.touches[0].clientY - startY.current;
+    if (dy > 0 && sheetRef.current) {
+      sheetRef.current.style.transition = "none";
+      sheetRef.current.style.transform = `translateY(${dy}px)`;
+    }
+  };
+  const onTouchEnd = (e) => {
+    const dy = e.changedTouches[0].clientY - startY.current;
+    if (dy > 100) { onClose(); }
+    else if (sheetRef.current) {
+      sheetRef.current.style.transition = "transform 0.3s ease";
+      sheetRef.current.style.transform = "translateY(0)";
+    }
+  };
 
   const handleInput = (e) => {
     const val = e.target.value;
@@ -184,18 +278,25 @@ function AddStockSheet({ onClose, onAdd }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }} />
-      <div style={{
-        position: "relative", background: "var(--color-background-primary)",
-        borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480,
-        padding: "0 0 env(safe-area-inset-bottom, 0px)",
-      }}>
-        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+      <div
+        ref={sheetRef}
+        style={{
+          position: "relative", background: "var(--color-background-primary)",
+          borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480,
+          padding: "0 0 env(safe-area-inset-bottom, 0px)",
+        }}
+      >
+        <div
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px", cursor: "grab" }}
+        >
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--color-border-secondary)" }} />
         </div>
         <div style={{ padding: "8px 20px 24px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ marginBottom: 16 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>종목 추가</span>
-            <span onClick={onClose} style={{ fontSize: 20, color: "var(--color-text-tertiary)", cursor: "pointer" }}>×</span>
           </div>
 
           {/* 검색 입력 */}
@@ -266,7 +367,7 @@ function AddStockSheet({ onClose, onAdd }) {
           <button onClick={handleAdd} disabled={!selected}
             style={{
               width: "100%", padding: "14px 0", fontSize: 15, fontWeight: 700,
-              background: "var(--color-text-primary)", color: "white",
+              background: "var(--color-text-primary)", color: "var(--color-background-primary)",
               border: "none", borderRadius: 12, cursor: selected ? "pointer" : "default",
               marginTop: 16, opacity: selected ? 1 : 0.4,
             }}>
@@ -333,7 +434,9 @@ export default function Home() {
   const isMobile = bp === "mobile";
   const isPC     = bp === "pc";
   const { user } = useAuth();
-  const [apiErrors, setApiErrors] = useState([]); // 'kiwoom' | 'kis'
+  const [apiErrors, setApiErrors] = useState([]);
+  const todayKey = `maintenance_dismissed_${new Date().toISOString().slice(0, 10)}`;
+  const alreadyDismissed = localStorage.getItem(todayKey) === "1";
   const [watchlist,   setWatchlist]   = useState([]);
   const [stockMeta,   setStockMeta]   = useState({});
   const [showAddSheet, setShowAddSheet] = useState(false);
@@ -341,6 +444,24 @@ export default function Home() {
   const [marketData,     setMarketData]     = useState({});
   const [marketSettings, setMarketSettings] = useState(loadMarketSettings);
   const [showMarketEdit, setShowMarketEdit] = useState(false);
+  const marketSheetRef = useRef(null);
+  const marketStartY = useRef(0);
+  const onMarketTouchStart = (e) => { marketStartY.current = e.touches[0].clientY; };
+  const onMarketTouchMove = (e) => {
+    const dy = e.touches[0].clientY - marketStartY.current;
+    if (dy > 0 && marketSheetRef.current) {
+      marketSheetRef.current.style.transition = "none";
+      marketSheetRef.current.style.transform = `translateY(${dy}px)`;
+    }
+  };
+  const onMarketTouchEnd = (e) => {
+    const dy = e.changedTouches[0].clientY - marketStartY.current;
+    if (dy > 100) { setShowMarketEdit(false); }
+    else if (marketSheetRef.current) {
+      marketSheetRef.current.style.transition = "transform 0.3s ease";
+      marketSheetRef.current.style.transform = "translateY(0)";
+    }
+  };
   const watchlistCodes = useMemo(() => watchlist.map((s) => s.code), [watchlist]);
   const livePrices = useLivePrices(watchlistCodes);
 
@@ -351,7 +472,7 @@ export default function Home() {
       getFX().catch(() => []),
     ]).then(([indicesResult, fxData]) => {
       const { data: indicesData, errors } = indicesResult;
-      if (errors.length > 0) setApiErrors(errors);
+      if (errors.length > 0 && !alreadyDismissed) setApiErrors(errors);
       const merged = {};
       indicesData.forEach((idx) => {
         merged[idx.name] = { value: idx.value, change_pct: idx.change_pct };
@@ -370,16 +491,16 @@ export default function Home() {
       .then((stocks) => {
         setWatchlist(stocks);
         // 각 종목 라인 정보 병렬 로드
-        stocks.forEach((s) => loadStockMeta(s.code));
+        stocks.forEach((s) => loadStockMeta(s.code, s.exchange || "NAS"));
       })
       .catch(() => setWatchlist([]))
       .finally(() => setLoadingList(false));
   }, [user?.id]);
 
-  const loadStockMeta = async (code) => {
+  const loadStockMeta = async (code, exchange = "NAS") => {
     const market = detectMarket(code);
     const [priceData, lines] = await Promise.all([
-      getPrice(market, code).catch(() => null),
+      getPrice(market, code, exchange).catch(() => null),
       getLines(code, user?.id).catch(() => []),
     ]);
 
@@ -442,7 +563,7 @@ export default function Home() {
           const changePct = live?.change_pct ?? null;
           const nearest = meta?.nearest;
           return (
-            <div key={stock.id ?? stock.code} onClick={() => navigate(`/chart/${stock.code}`, { state: { name: stock.name } })}
+            <div key={stock.id ?? stock.code} onClick={() => navigate(`/chart/${stock.code}`, { state: { name: stock.name, market: stock.market === "해외" ? "US" : "KOSPI", exchange: stock.exchange || "NAS" } })}
               className="row-hover"
               style={{ display: "flex", alignItems: "center", padding: "14px 16px", gap: 12, borderBottom: i < watchlist.length - 1 ? B : "none", cursor: "pointer" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -463,7 +584,7 @@ export default function Home() {
                       {isDom ? price.toLocaleString() + "원" : "$" + price.toLocaleString()}
                     </p>
                     {changePct && (
-                      <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: changePct.startsWith("-") ? "var(--color-text-danger)" : "var(--color-text-success)" }}>
+                      <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: changePct.startsWith("-") ? "var(--color-fall)" : "var(--color-rise)" }}>
                         {changePct}%
                       </p>
                     )}
@@ -491,7 +612,7 @@ export default function Home() {
 
   return (
     <div style={{ maxWidth: isPC ? 1200 : "100%", margin: "0 auto", padding: isPC ? "0 40px 40px" : "0 0 40px" }}>
-      {apiErrors.length > 0 && <MaintenanceModal errors={apiErrors} onClose={() => setApiErrors([])} />}
+      {apiErrors.length > 0 && <MaintenanceModal errors={apiErrors} onClose={() => { localStorage.setItem(todayKey, "1"); setApiErrors([]); }} />}
 
       {/* ── 2열 그리드 (PC) / 단열 (모바일) ── */}
       <div style={isPC ? { display: "grid", gridTemplateColumns: "1fr 380px", gap: 32, paddingTop: 24 } : {}}>
@@ -513,22 +634,27 @@ export default function Home() {
                 const data = marketData[item.id];
                 const changePct = data?.change_pct ? parseFloat(data.change_pct) : null;
                 const isUp = changePct !== null && changePct >= 0;
+                const clickable = ["SP500", "NASDAQ", "DOW"].includes(item.id);
                 return (
-                  <div key={item.id} style={{
-                    flexShrink: 0, minWidth: 110,
-                    background: "var(--color-background-primary)",
-                    borderRadius: 14, padding: "14px 16px",
-                    boxShadow: "var(--shadow-card)",
-                  }}>
+                  <div key={item.id}
+                    onClick={() => clickable && navigate(`/index/${item.id}`)}
+                    style={{
+                      flexShrink: 0, minWidth: 110,
+                      background: "var(--color-background-primary)",
+                      borderRadius: 14, padding: "14px 16px",
+                      boxShadow: "var(--shadow-card)",
+                      cursor: clickable ? "pointer" : "default",
+                    }}>
                     <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: "var(--color-text-tertiary)" }}>
                       {item.label}
                       {data?.unit > 1 && <span style={{ fontSize: 9, opacity: 0.6 }}> /100</span>}
+                      {clickable && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 3 }}>›</span>}
                     </p>
                     <p style={{ margin: "6px 0 2px", fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.5px" }}>
                       {data ? data.value.toLocaleString("ko-KR", { maximumFractionDigits: 2 }) : "—"}
                     </p>
                     {changePct !== null
-                      ? <span style={{ fontSize: 11, fontWeight: 600, color: isUp ? "var(--color-text-success)" : "var(--color-text-danger)" }}>
+                      ? <span style={{ fontSize: 11, fontWeight: 600, color: isUp ? "var(--color-rise)" : "var(--color-fall)" }}>
                           {isUp ? "+" : ""}{changePct.toFixed(2)}%
                         </span>
                       : <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>&nbsp;</span>
@@ -540,7 +666,7 @@ export default function Home() {
           </section>
 
           {/* 인기 종목 */}
-          <PopularSection isMobile={isMobile} isPC={isPC} navigate={navigate} onMaintenance={() => setApiErrors((prev) => prev.includes("kiwoom") ? prev : [...prev, "kiwoom"])} />
+          <PopularSection isMobile={isMobile} isPC={isPC} navigate={navigate} onMaintenance={() => { if (!alreadyDismissed) setApiErrors((prev) => prev.includes("kiwoom") ? prev : [...prev, "kiwoom"]); }} />
 
           {/* 모바일·태블릿: 관심종목 */}
           {!isPC && (
@@ -569,13 +695,17 @@ export default function Home() {
       {showMarketEdit && (
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
           <div onClick={() => setShowMarketEdit(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(4px)" }} />
-          <div style={{ position: "relative", background: "var(--color-background-primary)", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, maxHeight: "70vh", overflowY: "auto", padding: "0 0 env(safe-area-inset-bottom, 0px)" }}>
-            <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+          <div ref={marketSheetRef} style={{ position: "relative", background: "var(--color-background-primary)", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 480, maxHeight: "70vh", overflowY: "auto", padding: "0 0 env(safe-area-inset-bottom, 0px)" }}>
+            <div
+              onTouchStart={onMarketTouchStart}
+              onTouchMove={onMarketTouchMove}
+              onTouchEnd={onMarketTouchEnd}
+              style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px", cursor: "grab" }}
+            >
               <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--color-border-secondary)" }} />
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 20px 12px" }}>
+            <div style={{ padding: "8px 20px 12px" }}>
               <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>마켓 표시 설정</span>
-              <span onClick={() => setShowMarketEdit(false)} style={{ fontSize: 20, color: "var(--color-text-tertiary)", cursor: "pointer" }}>×</span>
             </div>
             {[
               { label: "지수", ids: ["KOSPI", "KOSDAQ", "SP500", "NASDAQ", "DOW"] },

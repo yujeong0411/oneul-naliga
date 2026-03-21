@@ -39,7 +39,13 @@ export default function SearchOverlay({ onClose }) {
     saveRecent(updated);
 
     onClose();
-    navigate(`/chart/${stock.code}`);
+    navigate(`/chart/${stock.code}`, {
+      state: {
+        name: stock.name,
+        market: stock.market === "해외" ? "US" : "KOSPI",
+        exchange: stock.exchange || "NAS",
+      },
+    });
   };
 
   const handleRemoveRecent = (code, e) => {

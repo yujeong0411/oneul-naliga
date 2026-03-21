@@ -33,6 +33,12 @@ export const getRanking = (type = "view") =>
     return r.json();
   });
 
+export const getOverseasRanking = (type = "rise", exchange = "NAS") =>
+  fetch(`${BASE}/stocks/ranking/overseas?type=${type}&exchange=${exchange}`).then((r) => r.json());
+
+export const getIndexCandles = (code, period = "D", count = 200) =>
+  fetch(`${BASE}/stocks/indices/candles?code=${encodeURIComponent(code)}&period=${period}&count=${count}`).then((r) => r.json());
+
 // ── 시장 지수 ─────────────────────────────────────
 
 export const getIndices = () =>
@@ -48,13 +54,13 @@ export const getFX = () =>
 
 // ── 차트 데이터 ─────────────────────────────────
 
-export const getCandles = (market, symbol, timeframe = "일봉", count = 200) =>
-  fetch(`${BASE}/stocks/${market}/${symbol}/candles?timeframe=${encodeURIComponent(timeframe)}&count=${count}`).then((r) =>
+export const getCandles = (market, symbol, timeframe = "일봉", count = 200, exchange = "NAS") =>
+  fetch(`${BASE}/stocks/${market}/${symbol}/candles?timeframe=${encodeURIComponent(timeframe)}&count=${count}&exchange=${exchange}`).then((r) =>
     r.json()
   );
 
-export const getPrice = (market, symbol) =>
-  fetch(`${BASE}/stocks/${market}/${symbol}/price`).then((r) => r.json());
+export const getPrice = (market, symbol, exchange = "NAS") =>
+  fetch(`${BASE}/stocks/${market}/${symbol}/price?exchange=${exchange}`).then((r) => r.json());
 
 // ── 투자자별 매매동향 ──────────────────────────────
 
@@ -63,8 +69,8 @@ export const getInvestors = (market, symbol, count = 20) =>
 
 // ── 호가 조회 ─────────────────────────────────────
 
-export const getOrderbook = (market, symbol) =>
-  fetch(`${BASE}/stocks/${market}/${symbol}/orderbook`).then((r) => r.json());
+export const getOrderbook = (market, symbol, exchange = "NAS") =>
+  fetch(`${BASE}/stocks/${market}/${symbol}/orderbook?exchange=${exchange}`).then((r) => r.json());
 
 // ── 고점 / 저점 탐지 ────────────────────────────
 
@@ -75,3 +81,4 @@ export const getPeaks = (market, symbol, n = 10) =>
 
 export const detectMarket = (code) =>
   /^\d{6}$/.test(code) ? "KOSPI" : "US";
+

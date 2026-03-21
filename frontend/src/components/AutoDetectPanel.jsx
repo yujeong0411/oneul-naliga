@@ -62,15 +62,20 @@ export default function AutoDetectPanel({ market, code, timeframe, onPointsSelec
   };
 
   const list = viewMode === "peaks" ? peaks : valleys;
+  const dotColor = viewMode === "peaks" ? "#ef4444" : "#3b82f6";
 
   return (
     <div style={{ padding: "12px 0" }}>
       {/* N 슬라이더 */}
       <div style={{ padding: "0 20px 12px", borderBottom: B }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
           <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>민감도</span>
           <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>N = {n}</span>
         </div>
+        <p style={{ margin: "0 0 8px", fontSize: 11, color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
+          N개 봉 중 최고(최저)가인 지점을 고점(저점)으로 인식합니다.<br />
+          낮을수록 작은 파동도 탐지하고, 높을수록 큰 흐름만 탐지합니다.
+        </p>
         <input
           type="range" min={3} max={30} value={n}
           onChange={(e) => setN(Number(e.target.value))}
@@ -85,16 +90,16 @@ export default function AutoDetectPanel({ market, code, timeframe, onPointsSelec
       {/* 고점 / 저점 탭 */}
       <div style={{ display: "flex", margin: "12px 20px", border: B, borderRadius: 10, overflow: "hidden" }}>
         {[
-          { key: "peaks", label: `고점 ${peaks.length}개` },
-          { key: "valleys", label: `저점 ${valleys.length}개` },
-        ].map(({ key, label }) => (
+          { key: "peaks",   label: `고점 ${peaks.length}개`,   activeColor: "#ef4444" },
+          { key: "valleys", label: `저점 ${valleys.length}개`, activeColor: "#3b82f6" },
+        ].map(({ key, label, activeColor }) => (
           <button
             key={key}
             onClick={() => setViewMode(key)}
             style={{
               flex: 1, padding: "9px 0", fontSize: 13, fontWeight: viewMode === key ? 600 : 400,
-              background: viewMode === key ? "var(--color-text-primary)" : "transparent",
-              color: viewMode === key ? "white" : "var(--color-text-secondary)",
+              background: viewMode === key ? activeColor : "transparent",
+              color: viewMode === key ? "#ffffff" : "var(--color-text-secondary)",
               border: "none", cursor: "pointer",
             }}
           >
@@ -140,13 +145,16 @@ export default function AutoDetectPanel({ market, code, timeframe, onPointsSelec
                   cursor: "pointer",
                 }}
               >
-                <div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
-                    {point.price.toLocaleString()}
-                  </span>
-                  <span style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginLeft: 8 }}>
-                    {point.date}
-                  </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                      {point.price.toLocaleString()}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginLeft: 8 }}>
+                      {point.date}
+                    </span>
+                  </div>
                 </div>
                 <div style={{
                   width: 22, height: 22, borderRadius: "50%", border: `2px solid ${sel ? "var(--color-text-info)" : "var(--color-border-secondary)"}`,
@@ -171,7 +179,7 @@ export default function AutoDetectPanel({ market, code, timeframe, onPointsSelec
             onClick={handleDraw}
             style={{
               width: "100%", padding: "13px 0", fontSize: 14, fontWeight: 700,
-              background: "var(--color-text-primary)", color: "white",
+              background: "var(--btn-active-bg)", color: "var(--btn-active-text)",
               border: "none", borderRadius: 12, cursor: "pointer",
             }}
           >

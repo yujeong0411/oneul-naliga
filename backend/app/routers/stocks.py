@@ -8,7 +8,7 @@ from app.services.kiwoom import KiwoomMaintenanceError
 from app.services.peak_detector import find_peaks, find_valleys
 from app.database import get_supabase
 from app.config import settings
-from app.data.stock_list import search_stocks
+from app.data.stock_list import search_stocks, get_exchanges
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
@@ -27,9 +27,35 @@ async def search(q: str = Query(default="", min_length=1)):
     return search_stocks(q, limit=10, include_us=has_kis)
 
 
+@router.get("/exchange/{code}")
+async def get_exchange(code: str):
+    """해외 종목 거래소 코드 조회 (NAS|NYS|AMS)"""
+    exchanges = get_exchanges([code])
+    return {"exchange": exchanges.get(code, "NAS")}
+
+
 # ─────────────────────────────────────────
 # 인기종목 랭킹
 # ─────────────────────────────────────────
+
+@router.get("/ranking/overseas")
+async def get_overseas_ranking(type: str = Query(default="rise"), exchange: str = Query(default="NAS")):
+    """해외주식 랭킹 조회 (type: rise|fall|volume|amount|marketcap, exchange: NAS|NYS|AMS|HKS)"""
+    try:
+        return await kis.get_overseas_ranking(type, exchange)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/indices/candles")
+async def get_index_candles(code: str = Query(...), period: str = Query(default="D"), count: int = Query(default=600)):
+    """해외 지수 캔들 조회 (code: SPX|COMP|.DJI, period: D|W|M|Y)"""
+    try:
+        candles, info = await kis.get_index_candles(code, period, count)
+        return {"candles": candles, "info": info}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
 
 @router.get("/ranking")
 async def get_ranking(type: str = Query(default="view")):
@@ -159,6 +185,7 @@ class StockAdd(BaseModel):
     name: str
     market: Literal["국내", "해외"]
     user_id: Optional[str] = None
+    exchange: Optional[str] = None
 
 
 @router.get("/")
@@ -168,7 +195,17 @@ async def get_watchlist(user_id: Optional[str] = Query(default=None)):
     query = db.table("stocks").select("*").order("created_at", desc=False)
     if user_id:
         query = query.eq("user_id", user_id)
-    return query.execute().data
+    items = query.execute().data
+
+    # 해외 종목에 거래소 코드 추가 (DB에 저장된 값 우선, 없으면 KIS lookup)
+    us_codes = [s["code"] for s in items if not s["code"].isdigit() and not s.get("exchange")]
+    if us_codes:
+        exchanges = get_exchanges(us_codes)
+        for s in items:
+            if not s["code"].isdigit() and not s.get("exchange"):
+                s["exchange"] = exchanges.get(s["code"], "NAS")
+
+    return items
 
 
 @router.post("/")
@@ -182,7 +219,12 @@ async def add_stock(body: StockAdd):
     existing = query.execute().data
     if existing:
         raise HTTPException(status_code=409, detail="이미 등록된 종목입니다")
-    result = db.table("stocks").insert(body.model_dump()).execute()
+    data = body.model_dump()
+    try:
+        result = db.table("stocks").insert(data).execute()
+    except Exception:
+        data.pop("exchange", None)
+        result = db.table("stocks").insert(data).execute()
     return result.data[0]
 
 
@@ -206,7 +248,7 @@ async def get_candles(
     market: Literal["KOSPI", "KOSDAQ", "US"],
     symbol: str,
     timeframe: str = Query(default="일봉"),
-    count: int = Query(default=200, ge=1, le=1000),
+    count: int = Query(default=600, ge=1, le=1000),
     exchange: str = Query(default="NAS", description="US 전용: NAS, NYS, AMS"),
 ):
     """캔들 데이터 조회 (timeframe: 일봉·주봉·월봉·60분·30분)"""
@@ -226,7 +268,17 @@ async def get_candles(
             else:  # 일봉 기본
                 candles = await kiwoom.get_daily_candles(symbol, count)
         else:
-            candles = await kis.get_daily_candles(symbol, count, exchange)
+            if timeframe == "주봉":
+                candles = await kis.get_weekly_candles(symbol, count, exchange)
+            elif timeframe == "월봉":
+                candles = await kis.get_monthly_candles(symbol, count, exchange)
+            elif timeframe == "년봉":
+                candles = await kis.get_yearly_candles(symbol, count, exchange)
+            elif timeframe.endswith("분"):
+                interval = int(timeframe.replace("분", ""))
+                candles = await kis.get_minute_candles(symbol, interval, count, exchange)
+            else:
+                candles = await kis.get_daily_candles(symbol, count, exchange)
         return {"symbol": symbol, "market": market, "timeframe": timeframe, "candles": [c.model_dump() for c in candles]}
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -276,13 +328,20 @@ async def get_investors(
 async def get_orderbook(
     market: Literal["KOSPI", "KOSDAQ", "US"],
     symbol: str,
+    exchange: str = Query(default="NAS"),
 ):
-    """주식 호가 조회 (매도/매수 각 10호가)"""
-    if market == "US":
-        raise HTTPException(status_code=400, detail="해외 종목은 호가를 지원하지 않습니다")
+    """주식 호가 조회 (매도/매수 각 10호가 — 국내: 키움, 해외: KIS)"""
     try:
+        if market == "US":
+            return await kis.get_us_orderbook(symbol, exchange)
         return await kiwoom.get_orderbook(symbol)
+    except KiwoomMaintenanceError:
+        raise HTTPException(status_code=503, detail="서버 점검 중입니다. 잠시 후 다시 시도해 주세요.")
     except Exception as e:
+        if market == "US":
+            # 해외 호가 REST 실패 시 빈 데이터 반환 (WS 실시간으로 채워짐)
+            print(f"[orderbook] {symbol}/{exchange} REST 실패: {type(e).__name__}: {e}")
+            return {"asks": [], "bids": [], "total_ask_qty": 0, "total_bid_qty": 0}
         raise HTTPException(status_code=502, detail=str(e))
 
 

@@ -5,18 +5,11 @@ const SENSITIVITY_LABELS = ["±0.3%", "±0.5%", "±0.7%", "±1.0%", "±1.5%"];
 const SENSITIVITY_VALUES = [0.3, 0.5, 0.7, 1.0, 1.5];
 const COLOR_PRESETS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#6b7280"];
 
-export default function AddLineModal({
-  onClose,
-  onSave,
-  preselectedType = null,   // "trend" | "horizontal" | null
-  defaultTimeframe = "일봉",
-  currentPrice = null,
-}) {
-  const isTrend = preselectedType === "trend";
-  const [lineName, setLineName] = useState("");
-  const [price, setPrice] = useState("");
-  const [sensitivityIdx, setSensitivityIdx] = useState(1);
-  const [selectedColor, setSelectedColor] = useState("#ef4444");
+export default function EditLineSheet({ line, onClose, onSave }) {
+  const [name, setName] = useState(line.name || "");
+  const [selectedColor, setSelectedColor] = useState(line.color || "#ef4444");
+  const initialIdx = SENSITIVITY_VALUES.findIndex((v) => v === line.sensitivity) ?? 1;
+  const [sensitivityIdx, setSensitivityIdx] = useState(initialIdx >= 0 ? initialIdx : 1);
 
   const sheetRef = useRef(null);
   const startY = useRef(0);
@@ -40,22 +33,14 @@ export default function AddLineModal({
   };
 
   const handleSave = () => {
-    if (!isTrend && !price) return;
-
-    // 현재가와 비교해 자동으로 지지/저항 결정 (알림용)
-    const priceNum = Number(price);
-    const signalType = (!currentPrice || priceNum <= currentPrice) ? "loss" : "attack";
-
-    onSave({
-      line_type: isTrend ? "trend" : "horizontal",
-      name: lineName || (isTrend ? "추세선" : "수평선"),
-      signal_type: signalType,
-      timeframe: defaultTimeframe,
-      sensitivity: SENSITIVITY_VALUES[sensitivityIdx],
-      price: isTrend ? null : priceNum,
+    onSave(line.id, {
+      name: name || line.name,
       color: selectedColor,
+      sensitivity: SENSITIVITY_VALUES[sensitivityIdx],
     });
   };
+
+  const target = line.line_type === "horizontal" ? line.price : line.y2;
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
@@ -68,11 +53,10 @@ export default function AddLineModal({
           background: "var(--color-background-primary)",
           borderRadius: "20px 20px 0 0",
           width: "100%", maxWidth: 480,
-          overflow: "hidden",
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
       >
-        {/* 핸들 (드래그 영역) */}
+        {/* 핸들 */}
         <div
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
@@ -84,55 +68,27 @@ export default function AddLineModal({
 
         {/* 헤더 */}
         <div style={{ padding: "8px 20px 12px", borderBottom: B }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>
-            {isTrend ? "추세선 저장" : "수평선 추가"}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 12, height: 12, borderRadius: "50%", background: selectedColor, flexShrink: 0 }} />
+            <span style={{ fontSize: 16, fontWeight: 700, color: "var(--color-text-primary)" }}>선 수정</span>
+          </div>
+          {target && (
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--color-text-tertiary)" }}>
+              {line.line_type === "horizontal" ? "수평선" : "추세선"} · {target.toLocaleString()}
+            </p>
+          )}
         </div>
 
         <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* 추세선 안내 */}
-          {isTrend && (
-            <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 14px" }}>
-              <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-success)", fontWeight: 500 }}>
-                두 점이 선택됐습니다. 선 정보를 입력하세요.
-              </p>
-            </div>
-          )}
-
-          {/* 가격 입력 (수평선만) */}
-          {!isTrend && (
-            <div>
-              <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>
-                가격
-              </label>
-              <input
-                type="number"
-                placeholder={currentPrice ? `현재가: ${currentPrice.toLocaleString()}` : "예: 70000"}
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                style={{
-                  width: "100%", fontSize: 16, fontWeight: 600, padding: "12px 14px",
-                  border: B, borderRadius: 10, outline: "none", boxSizing: "border-box",
-                  color: "var(--color-text-primary)", background: "var(--color-background-secondary)",
-                }}
-              />
-              <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--color-text-tertiary)" }}>
-                현재가보다 낮으면 지지선, 높으면 저항선으로 자동 분류됩니다.
-              </p>
-            </div>
-          )}
-
-          {/* 선 이름 */}
+          {/* 이름 */}
           <div>
-            <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>
-              이름 (선택)
-            </label>
+            <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>이름</label>
             <input
               type="text"
-              placeholder={isTrend ? "예: 1월 추세선" : "예: 목표가, 손절가…"}
-              value={lineName}
-              onChange={(e) => setLineName(e.target.value)}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="선 이름"
               style={{
                 width: "100%", fontSize: 14, padding: "11px 14px", border: B,
                 borderRadius: 10, outline: "none", boxSizing: "border-box",
@@ -141,11 +97,9 @@ export default function AddLineModal({
             />
           </div>
 
-          {/* 색상 선택 */}
+          {/* 색상 */}
           <div>
-            <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>
-              색상
-            </label>
+            <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>색상</label>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               {COLOR_PRESETS.map((c) => (
                 <div
@@ -166,16 +120,11 @@ export default function AddLineModal({
           {/* 알림 민감도 */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <label style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                알림 민감도
-              </label>
+              <label style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>알림 민감도</label>
               <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
                 {SENSITIVITY_LABELS[sensitivityIdx]}
               </span>
             </div>
-            <p style={{ margin: "0 0 8px", fontSize: 11, color: "var(--color-text-tertiary)" }}>
-              현재가가 이 선에 얼마나 가까워지면 알림을 보낼지 설정합니다.
-            </p>
             <input
               type="range" min={0} max={4} value={sensitivityIdx}
               onChange={(e) => setSensitivityIdx(Number(e.target.value))}
@@ -187,15 +136,13 @@ export default function AddLineModal({
             </div>
           </div>
 
-          {/* 저장 버튼 */}
+          {/* 버튼 */}
           <button
             onClick={handleSave}
-            disabled={!isTrend && !price}
             style={{
               width: "100%", padding: "14px 0", fontSize: 15, fontWeight: 700,
               background: "var(--color-text-primary)", color: "var(--color-background-primary)",
               border: "none", borderRadius: 12, cursor: "pointer",
-              opacity: !isTrend && !price ? 0.4 : 1,
             }}
           >
             저장

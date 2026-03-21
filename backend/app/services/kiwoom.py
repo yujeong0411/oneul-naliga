@@ -4,6 +4,7 @@
 - 국내 주식 일봉 데이터 조회 (ka10081)
 - 국내 주식 현재가 조회 (ka10001)
 """
+import asyncio
 import httpx
 from datetime import datetime
 from app.config import settings
@@ -17,82 +18,110 @@ class KiwoomMaintenanceError(Exception):
 BASE_URL = "https://api.kiwoom.com"
 
 _token_cache: dict = {}
+_token_lock: asyncio.Lock | None = None
+
+
+def _get_token_lock() -> asyncio.Lock:
+    global _token_lock
+    if _token_lock is None:
+        _token_lock = asyncio.Lock()
+    return _token_lock
 
 
 async def get_access_token() -> str:
-    """키움 REST API 액세스 토큰 발급 (캐시 적용)"""
+    """키움 REST API 액세스 토큰 발급 (캐시 적용, 동시 중복 발급 방지)"""
     now = datetime.now().timestamp()
 
+    # 락 없이 먼저 캐시 확인 (빠른 경로)
     if _token_cache.get("token") and _token_cache.get("expires_at", 0) > now + 60:
         return _token_cache["token"]
 
-    async with httpx.AsyncClient(follow_redirects=False) as client:
-        resp = await client.post(
-            f"{BASE_URL}/oauth2/token",
-            headers={"Content-Type": "application/json;charset=UTF-8"},
-            json={
-                "grant_type": "client_credentials",
-                "appkey": settings.kiwoom_app_key,
-                "secretkey": settings.kiwoom_app_secret,
-            },
-        )
-        if resp.status_code in (301, 302, 303, 307, 308):
-            location = resp.headers.get("location", "")
-            print(f"[kiwoom] 🔧 서버 점검 중 (302 redirect → {location})")
-            raise KiwoomMaintenanceError(f"키움 API 점검 중: {location}")
-        resp.raise_for_status()
-        data = resp.json()
+    async with _get_token_lock():
+        # 락 획득 후 다시 확인 (다른 코루틴이 이미 발급했을 수 있음)
+        now = datetime.now().timestamp()
+        if _token_cache.get("token") and _token_cache.get("expires_at", 0) > now + 60:
+            return _token_cache["token"]
 
-    _token_cache["token"] = data["token"]
-    # expires_dt 형식: "20241107083713" (YYYYMMDDHHmmss)
-    try:
-        expires_dt = datetime.strptime(data["expires_dt"], "%Y%m%d%H%M%S").timestamp()
-        _token_cache["expires_at"] = expires_dt
-    except (KeyError, ValueError):
-        _token_cache["expires_at"] = now + 86400
-    return _token_cache["token"]
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            resp = await client.post(
+                f"{BASE_URL}/oauth2/token",
+                headers={"Content-Type": "application/json;charset=UTF-8"},
+                json={
+                    "grant_type": "client_credentials",
+                    "appkey": settings.kiwoom_app_key,
+                    "secretkey": settings.kiwoom_app_secret,
+                },
+            )
+            if resp.status_code in (301, 302, 303, 307, 308):
+                location = resp.headers.get("location", "")
+                print(f"[kiwoom] 🔧 서버 점검 중 (302 redirect → {location})")
+                raise KiwoomMaintenanceError(f"키움 API 점검 중: {location}")
+            resp.raise_for_status()
+            data = resp.json()
+
+        _token_cache["token"] = data["token"]
+        # expires_dt 형식: "20241107083713" (YYYYMMDDHHmmss)
+        try:
+            expires_dt = datetime.strptime(data["expires_dt"], "%Y%m%d%H%M%S").timestamp()
+            _token_cache["expires_at"] = expires_dt
+        except (KeyError, ValueError):
+            _token_cache["expires_at"] = now + 86400
+        print(f"[kiwoom] 토큰 발급 완료, 만료: {datetime.fromtimestamp(_token_cache['expires_at']).strftime('%Y-%m-%d %H:%M')}")
+        return _token_cache["token"]
 
 
 async def _get_chart(api_id: str, body: dict, result_key: str, count: int, date_key: str = "dt") -> list[StockCandle]:
-    """차트 공통 호출 헬퍼 (토큰 만료 시 1회 재시도)"""
-    for attempt in range(2):
-        token = await get_access_token()
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                f"{BASE_URL}/api/dostk/chart",
-                headers={
-                    "authorization": f"Bearer {token}",
-                    "Content-Type": "application/json;charset=UTF-8",
-                    "api-id": api_id,
-                    "cont-yn": "N",
-                    "next-key": "",
-                },
-                json=body,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            rc = data.get("return_code", 0)
-            if rc != 0 and attempt == 0:
-                print(f"[kiwoom] {api_id} return_code={rc}, 토큰 재발급 후 재시도")
-                await revoke_token()
-                _token_cache.clear()
+    """차트 공통 호출 헬퍼 (페이지네이션으로 최대 데이터 수집)"""
+    candles = []
+    next_key = ""
+    max_pages = 10  # 안전 상한
+
+    for page in range(max_pages):
+        for attempt in range(2):
+            token = await get_access_token()
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{BASE_URL}/api/dostk/chart",
+                    headers={
+                        "authorization": f"Bearer {token}",
+                        "Content-Type": "application/json;charset=UTF-8",
+                        "api-id": api_id,
+                        "cont-yn": "Y" if next_key else "N",
+                        "next-key": next_key,
+                    },
+                    json=body,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                rc = data.get("return_code", 0)
+                if rc != 0 and attempt == 0:
+                    print(f"[kiwoom] {api_id} return_code={rc}, 토큰 재발급 후 재시도")
+                    await revoke_token()
+                    _token_cache.clear()
+                    continue
+                break
+
+        for item in data.get(result_key, []):
+            try:
+                candles.append(StockCandle(
+                    date=item[date_key],
+                    open=abs(float(item["open_pric"])),
+                    high=abs(float(item["high_pric"])),
+                    low=abs(float(item["low_pric"])),
+                    close=abs(float(item["cur_prc"])),
+                    volume=int(item["trde_qty"]),
+                ))
+            except (KeyError, ValueError):
                 continue
+
+        if len(candles) >= count:
             break
 
-    candles = []
-    for item in data.get(result_key, [])[:count]:
-        try:
-            candles.append(StockCandle(
-                date=item[date_key],
-                open=abs(float(item["open_pric"])),
-                high=abs(float(item["high_pric"])),
-                low=abs(float(item["low_pric"])),
-                close=abs(float(item["cur_prc"])),
-                volume=int(item["trde_qty"]),
-            ))
-        except (KeyError, ValueError):
-            continue
-    return candles
+        next_key = data.get("next_key", "")
+        if not next_key:
+            break
+
+    return candles[:count]
 
 
 async def get_daily_candles(symbol: str, count: int = 200) -> list[StockCandle]:

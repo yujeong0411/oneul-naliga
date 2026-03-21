@@ -126,7 +126,7 @@ export default function InvestorPanel({ market, code }) {
                 </div>
                 <span style={{
                   fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                  color: val > 0 ? "var(--color-text-danger)" : val < 0 ? "var(--color-text-info)" : "var(--color-text-tertiary)",
+                  color: val > 0 ? "var(--color-rise)" : val < 0 ? "var(--color-fall)" : "var(--color-text-tertiary)",
                 }}>
                   {val > 0 ? "+" : ""}{fmtQty(val)}주
                 </span>
@@ -151,7 +151,7 @@ export default function InvestorPanel({ market, code }) {
               </div>
               <span style={{
                 fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                color: inv.total > 0 ? "var(--color-text-danger)" : inv.total < 0 ? "var(--color-text-info)" : "var(--color-text-tertiary)",
+                color: inv.total > 0 ? "var(--color-rise)" : inv.total < 0 ? "var(--color-fall)" : "var(--color-text-tertiary)",
               }}>
                 {inv.total > 0 ? "+" : ""}{fmtQty(inv.total)}주
               </span>
@@ -184,13 +184,13 @@ export default function InvestorPanel({ market, code }) {
             fontSize: 11, fontVariantNumeric: "tabular-nums",
           }}>
             <span style={{ color: "var(--color-text-tertiary)" }}>{fmtDate(d.date)}</span>
-            <span style={{ textAlign: "right", color: d.individual > 0 ? "var(--color-text-danger)" : d.individual < 0 ? "var(--color-text-info)" : "var(--color-text-tertiary)" }}>
+            <span style={{ textAlign: "right", color: d.individual > 0 ? "var(--color-rise)" : d.individual < 0 ? "var(--color-fall)" : "var(--color-text-tertiary)" }}>
               {d.individual > 0 ? "+" : ""}{fmtQty(d.individual)}
             </span>
-            <span style={{ textAlign: "right", color: d.foreign > 0 ? "var(--color-text-danger)" : d.foreign < 0 ? "var(--color-text-info)" : "var(--color-text-tertiary)" }}>
+            <span style={{ textAlign: "right", color: d.foreign > 0 ? "var(--color-rise)" : d.foreign < 0 ? "var(--color-fall)" : "var(--color-text-tertiary)" }}>
               {d.foreign > 0 ? "+" : ""}{fmtQty(d.foreign)}
             </span>
-            <span style={{ textAlign: "right", color: d.institution > 0 ? "var(--color-text-danger)" : d.institution < 0 ? "var(--color-text-info)" : "var(--color-text-tertiary)" }}>
+            <span style={{ textAlign: "right", color: d.institution > 0 ? "var(--color-rise)" : d.institution < 0 ? "var(--color-fall)" : "var(--color-text-tertiary)" }}>
               {d.institution > 0 ? "+" : ""}{fmtQty(d.institution)}
             </span>
           </div>

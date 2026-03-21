@@ -34,7 +34,15 @@
       "Bash(curl:*)",
       "Bash(find C:/oneul-naliga -type f \\\\\\(-name *.sql -o -name migrations* -o -name schema* \\\\\\))",
       "Bash(find C:/oneul-naliga -type f -name *.md -o -name *.txt)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(cmd.exe /c \"python --version\" 2>&1)",
+      "Bash(node -e \"console.log\\(''node ok''\\)\")",
+      "Bash(node:*)",
+      "Read(//c/Users/choiy/AppData/Roaming/npm/**)",
+      "Bash(npm list:*)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(/c/Users/choiy/AppData/Local/Programs/Python/Python312/python.exe -m pip install openpyxl -q)",
+      "Bash(/c/Users/choiy/AppData/Local/Programs/Python/Python312/python.exe -c \"import openpyxl; print\\('ok'\\)\")"
     ]
   }
 }
