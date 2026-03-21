@@ -96,6 +96,7 @@ export default function ChartDetail() {
   const [stockName, setStockName] = useState(location.state?.name || "");
   const [exchange, setExchange] = useState(location.state?.exchange || "NAS");
   const [isWatchlisted, setIsWatchlisted] = useState(false);
+  const [chartLoading, setChartLoading] = useState(false);
 
   const isDomestic = /^\d{6}$/.test(code);
   const { price: livePrice, change_pct: liveChangePct } = useLivePrice(code, exchange);
@@ -108,6 +109,7 @@ export default function ChartDetail() {
 
   useEffect(() => {
     const count = timeframe === "년봉" ? 50 : timeframe === "월봉" ? 600 : timeframe === "주봉" ? 600 : 600;
+    setChartLoading(true);
     getCandles(market, code, timeframe, count, exchange)
       .then((data) => {
         const chartData = (data.candles ?? []).reverse().map((c) => ({
@@ -119,7 +121,8 @@ export default function ChartDetail() {
         }));
         setCandles(chartData);
       })
-      .catch(() => { });
+      .catch(() => { })
+      .finally(() => setChartLoading(false));
   }, [code, market, timeframe]);
 
   useEffect(() => {
@@ -717,7 +720,19 @@ export default function ChartDetail() {
                   <button onClick={() => setDrawMode(true)} style={{ padding: "4px 12px", fontSize: 11, borderRadius: 20, border: B, background: drawMode ? "var(--btn-active-bg)" : "transparent", color: drawMode ? "var(--btn-active-text)" : "var(--color-text-secondary)", cursor: "pointer" }}>선 긋기</button>
                 </div>
               </div>
-              <div ref={chartRef} style={{ width: "100%", cursor: drawMode ? "crosshair" : "default" }} />
+              <div style={{ position: "relative" }}>
+                {chartLoading && (
+                  <div style={{
+                    position: "absolute", inset: 0, zIndex: 5,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "rgba(30,30,56,0.7)", borderRadius: 8,
+                    minHeight: 80,
+                  }}>
+                    <span style={{ color: "#a0a0c0", fontSize: 13 }}>차트 불러오는 중...</span>
+                  </div>
+                )}
+                <div ref={chartRef} style={{ width: "100%", cursor: drawMode ? "crosshair" : "default" }} />
+              </div>
             </div>
 
             {/* 내 선 */}
@@ -763,6 +778,16 @@ export default function ChartDetail() {
         <>
           {/* 차트 + 플로팅 선 긋기 버튼 */}
           <div style={{ background: "var(--color-background-primary)", borderBottom: B, position: "relative" }}>
+            {chartLoading && (
+              <div style={{
+                position: "absolute", inset: 0, zIndex: 5,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "rgba(30,30,56,0.7)",
+                minHeight: 80,
+              }}>
+                <span style={{ color: "#a0a0c0", fontSize: 13 }}>차트 불러오는 중...</span>
+              </div>
+            )}
             <div ref={chartRef} style={{ width: "100%" }} />
             {/* 플로팅 버튼 */}
             <button

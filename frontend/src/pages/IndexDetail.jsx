@@ -75,24 +75,19 @@ export default function IndexDetail() {
       chartInstance.current = null;
     }
 
-    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
     const chart = createChart(chartRef.current, {
-      width: chartRef.current.clientWidth,
-      height: isMobile ? 260 : 340,
-      layout: {
-        background: { color: "transparent" },
-        textColor: isDark ? "#9ca3af" : "#6b7280",
-        fontSize: 11,
-      },
-      grid: {
-        vertLines: { color: isDark ? "#1f2937" : "#f3f4f6" },
-        horzLines: { color: isDark ? "#1f2937" : "#f3f4f6" },
-      },
+      layout: { background: { color: "#1e1e38" }, textColor: "#a0a0c0" },
+      grid: { vertLines: { color: "#2a2a4a" }, horzLines: { color: "#2a2a4a" } },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false, timeVisible: false },
-      handleScroll: true,
-      handleScale: true,
+      rightPriceScale: { borderColor: "#2a2a4a" },
+      timeScale: {
+        borderColor: "#2a2a4a", timeVisible: true, secondsVisible: false,
+        minBarSpacing: 1,
+      },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true, axisDoubleClickReset: true },
+      width: chartRef.current.clientWidth,
+      height: isMobile ? 300 : 520,
     });
 
     const series = chart.addCandlestickSeries({
@@ -116,7 +111,17 @@ export default function IndexDetail() {
       }));
 
     series.setData(chartData);
-    chart.timeScale().fitContent();
+
+    // 타임프레임별 표시 구간 설정 (ChartDetail과 동일)
+    const lastTime = chartData[chartData.length - 1]?.time;
+    if (lastTime) {
+      const d = new Date(lastTime);
+      if (period === "W") d.setMonth(d.getMonth() - 1);
+      else if (period === "M") d.setMonth(d.getMonth() - 6);
+      else if (period === "Y") d.setFullYear(d.getFullYear() - 2);
+      else d.setDate(d.getDate() - 7); // D (일봉)
+      chart.timeScale().setVisibleRange({ from: d.toISOString().slice(0, 10), to: lastTime });
+    }
 
     chartInstance.current = chart;
     seriesRef.current = series;
