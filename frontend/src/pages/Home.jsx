@@ -89,9 +89,20 @@ function RankItem({ item, i, onClick, isOverseas }) {
       </div>
       <div style={{ textAlign: "right" }}>
         <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{priceFmt(item.price)}</p>
-        {item.change_pct && (
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: changeColor(item.change_pct) }}>{item.change_pct}%</p>
-        )}
+        {item.change_pct && (() => {
+          const isUp = !String(item.change_pct).startsWith("-");
+          const amt = (item.change_amt != null && item.change_amt !== 0)
+            ? item.change_amt
+            : (item.price ? Math.abs(item.price * parseFloat(item.change_pct) / 100) : null);
+          const amtStr = amt
+            ? (isOverseas ? Math.abs(amt).toFixed(2) : Math.round(Math.abs(amt)).toLocaleString())
+            : null;
+          return (
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: changeColor(item.change_pct) }}>
+              {isUp ? "▲" : "▼"}{amtStr ? `${amtStr} ` : ""}({item.change_pct}%)
+            </p>
+          );
+        })()}
         {item.extra && (
           <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-tertiary)" }}>{item.extra}</p>
         )}
@@ -482,7 +493,7 @@ export default function Home() {
       if (errors.length > 0 && !alreadyDismissed) setApiErrors(errors);
       const merged = {};
       indicesData.forEach((idx) => {
-        merged[idx.name] = { value: idx.value, change_pct: idx.change_pct };
+        merged[idx.name] = { value: idx.value, change_pct: idx.change_pct, pred_pre: idx.pred_pre ?? null };
       });
       fxData.forEach((item) => {
         const currency = item.pair.split("/")[0];
@@ -521,6 +532,8 @@ export default function Home() {
 
     // 가장 가까운 선 계산
     const price = priceData?.price ?? null;
+    const changePctMeta = priceData?.change_pct ?? null;
+    const changeAmtMeta = priceData?.change_amt ?? null;
     let nearest = null;
     if (price && lines.length > 0) {
       const withDist = lines
@@ -534,7 +547,7 @@ export default function Home() {
 
     setStockMeta((prev) => ({
       ...prev,
-      [code]: { price, lineCount: lines.length, nearest },
+      [code]: { price, change_pct: changePctMeta, change_amt: changeAmtMeta, lineCount: lines.length, nearest },
     }));
   };
 
@@ -575,7 +588,8 @@ export default function Home() {
           const isDom   = /^\d{6}$/.test(stock.code);
           const live    = liveData[stock.code];
           const price   = live?.price ?? meta?.price;
-          const changePct = live?.change_pct ?? null;
+          const changePct = live?.change_pct ?? meta?.change_pct ?? null;
+          const changeAmt = meta?.change_amt ?? null;
           const nearest = meta?.nearest;
           return (
             <div key={stock.id ?? stock.code} onClick={() => navigate(`/chart/${stock.code}`, { state: { name: stock.name, market: stock.market === "해외" ? "US" : "KOSPI", exchange: stock.exchange || "NAS" } })}
@@ -598,11 +612,20 @@ export default function Home() {
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>
                       {isDom ? price.toLocaleString() + "원" : "$" + price.toLocaleString()}
                     </p>
-                    {changePct && (
-                      <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: changePct.startsWith("-") ? "var(--color-fall)" : "var(--color-rise)" }}>
-                        {changePct}%
-                      </p>
-                    )}
+                    {changePct && (() => {
+                      const isUp = !changePct.startsWith("-");
+                      const amt = (changeAmt != null && changeAmt !== 0)
+                        ? changeAmt
+                        : (price ? Math.abs(price * parseFloat(changePct) / 100) : null);
+                      const amtStr = amt
+                        ? (isDom ? Math.round(amt).toLocaleString() : amt.toFixed(2))
+                        : null;
+                      return (
+                        <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: isUp ? "var(--color-rise)" : "var(--color-fall)" }}>
+                          {isUp ? "▲" : "▼"}{amtStr ? `${amtStr} ` : ""}({changePct}%)
+                        </p>
+                      );
+                    })()}
                   </>
                 ) : (
                   <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-tertiary)" }}>—</p>
@@ -649,10 +672,14 @@ export default function Home() {
                 const data = marketData[item.id];
                 const changePct = data?.change_pct ? parseFloat(data.change_pct) : null;
                 const isUp = changePct !== null && changePct >= 0;
-                const clickable = ["SP500", "NASDAQ", "DOW"].includes(item.id);
+                const clickable = ["SP500", "NASDAQ", "DOW", "KOSPI", "KOSDAQ"].includes(item.id);
                 return (
                   <div key={item.id}
-                    onClick={() => clickable && navigate(`/index/${item.id}`)}
+                    onClick={() => {
+                      if (!clickable) return;
+                      if (item.id === "KOSPI" || item.id === "KOSDAQ") navigate(`/domestic/${item.id}`);
+                      else navigate(`/index/${item.id}`);
+                    }}
                     style={{
                       flexShrink: 0, minWidth: 110,
                       background: "var(--color-background-primary)",
@@ -669,9 +696,17 @@ export default function Home() {
                       {data ? data.value.toLocaleString("ko-KR", { maximumFractionDigits: 2 }) : "—"}
                     </p>
                     {changePct !== null
-                      ? <span style={{ fontSize: 11, fontWeight: 600, color: isUp ? "var(--color-rise)" : "var(--color-fall)" }}>
-                          {isUp ? "+" : ""}{changePct.toFixed(2)}%
-                        </span>
+                      ? (() => {
+                          const amt = data?.pred_pre;
+                          const amtStr = amt != null && amt !== 0
+                            ? (amt >= 1 ? Number(amt).toFixed(2) : Number(amt).toFixed(4))
+                            : null;
+                          return (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: isUp ? "var(--color-rise)" : "var(--color-fall)" }}>
+                              {isUp ? "▲" : "▼"}{amtStr ? `${amtStr} ` : ""}({isUp ? "+" : ""}{changePct.toFixed(2)}%)
+                            </span>
+                          );
+                        })()
                       : <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>&nbsp;</span>
                     }
                   </div>

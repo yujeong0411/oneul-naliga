@@ -206,7 +206,73 @@ async def get_current_price(symbol: str) -> float:
                 continue
             break
 
-    return abs(float(data["cur_prc"]))
+    return {
+        "price":      abs(float(data["cur_prc"])),
+        "change_pct": data.get("flu_rt", "0.00"),
+        "change_amt": _parse_price(data.get("pred_pre", "0")),
+    }
+
+
+async def _call_etf(api_id: str, body: dict) -> dict:
+    """ETF TR 공통 호출"""
+    for attempt in range(2):
+        token = await get_access_token()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{BASE_URL}/api/dostk/etf",
+                headers={
+                    "authorization": f"Bearer {token}",
+                    "Content-Type": "application/json;charset=UTF-8",
+                    "api-id": api_id,
+                    "cont-yn": "N",
+                    "next-key": "",
+                },
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            rc = data.get("return_code", 0)
+            if rc != 0 and attempt == 0:
+                await revoke_token()
+                _token_cache.clear()
+                continue
+            break
+    return data
+
+
+async def get_etf_info(stk_cd: str) -> dict | None:
+    """ETF 종목정보 (ka40002). 일반 주식이면 None 반환."""
+    try:
+        data = await _call_etf("ka40002", {"stk_cd": stk_cd})
+        if data.get("return_code") != 0:
+            return None
+        return {
+            "stk_nm":       data.get("stk_nm", ""),
+            "wonju_pric":   data.get("wonju_pric", "0"),
+            "txon_type":    data.get("etftxon_type", ""),
+        }
+    except Exception:
+        return None
+
+
+async def get_etf_daily(stk_cd: str) -> list[dict]:
+    """ETF 일별추이 (ka40003) — NAV 포함."""
+    data = await _call_etf("ka40003", {"stk_cd": stk_cd})
+    rows = data.get("etfdaly_trnsn", [])
+    result = []
+    for r in rows:
+        try:
+            nav_raw = r.get("nav", "0").replace("+", "").strip()
+            nav = float(nav_raw) if nav_raw and nav_raw != "0.00" else None
+            result.append({
+                "date":     r["cntr_dt"],
+                "close":    abs(float(r.get("cur_prc", "0"))),
+                "nav":      nav,
+                "nav_diff": r.get("navetfdispty_rt", "0.00"),
+            })
+        except Exception:
+            continue
+    return result
 
 
 async def _call_ranking(endpoint: str, api_id: str, body: dict) -> dict:
@@ -244,6 +310,44 @@ def _parse_price(raw: str) -> float:
         return 0.0
 
 
+async def get_domestic_index_candles(inds_cd: str, period: str = "D", count: int = 600) -> list[StockCandle]:
+    """
+    국내 지수 캔들 조회
+    period: D=일봉(ka20006), W=주봉(ka20007), M=월봉(ka20008), Y=년봉(ka20009)
+    inds_cd: 001=KOSPI, 101=KOSDAQ
+    """
+    api_map = {
+        "D": ("ka20006", "inds_dt_pole_qry"),
+        "W": ("ka20007", "inds_stk_pole_qry"),
+        "M": ("ka20008", "inds_mth_pole_qry"),
+        "Y": ("ka20009", "inds_yr_pole_qry"),
+    }
+    api_id, result_key = api_map.get(period, ("ka20006", "inds_dt_pole_qry"))
+    today = datetime.now().strftime("%Y%m%d")
+    return await _get_chart(
+        api_id,
+        {"inds_cd": inds_cd, "base_dt": today},
+        result_key,
+        count,
+    )
+
+
+async def get_domestic_index_info(inds_cd: str, mrkt_tp: str = "0") -> dict:
+    """국내 지수 현재가 상세 (ka20001)"""
+    data = await _call_ranking("/api/dostk/sect", "ka20001", {"mrkt_tp": mrkt_tp, "inds_cd": inds_cd})
+    return {
+        "cur_prc":   _parse_price(data.get("cur_prc", "0")),
+        "pred_pre":  _parse_price(data.get("pred_pre", "0")),
+        "flu_rt":    data.get("flu_rt", "0.00"),
+        "open_pric": _parse_price(data.get("open_pric", "0")),
+        "high_pric": _parse_price(data.get("high_pric", "0")),
+        "low_pric":  _parse_price(data.get("low_pric", "0")),
+        "trde_qty":  data.get("trde_qty", "0"),
+        "52wk_hgst_pric": _parse_price(data.get("52wk_hgst_pric", "0")),
+        "52wk_lwst_pric": _parse_price(data.get("52wk_lwst_pric", "0")),
+    }
+
+
 async def get_indices() -> list[dict]:
     """KOSPI / KOSDAQ 지수 조회 (ka20003)"""
     results = []
@@ -275,6 +379,7 @@ async def get_ranking(rank_type: str) -> list[dict]:
                 "name": item["stk_nm"],
                 "price": _parse_price(item.get("past_curr_prc", "0")),
                 "change_pct": item.get("base_comp_chgr", "0.00"),
+                "change_amt": None,  # ka00198 API에 전일대비 금액 필드 없음 → 프론트에서 계산
                 "extra": None,
             }
             for i, item in enumerate(data.get("item_inq_rank", [])[:100])
@@ -293,6 +398,7 @@ async def get_ranking(rank_type: str) -> list[dict]:
                 "name": item["stk_nm"],
                 "price": _parse_price(item.get("cur_prc", "0")),
                 "change_pct": item.get("flu_rt", "0.00"),
+                "change_amt": _parse_price(item.get("pred_pre", "0")),
                 "extra": f'{int(item.get("trde_qty","0")):,}주',
             }
             for i, item in enumerate(data.get("tdy_trde_qty_upper", [])[:100])
@@ -309,6 +415,7 @@ async def get_ranking(rank_type: str) -> list[dict]:
                 "name": item["stk_nm"],
                 "price": _parse_price(item.get("cur_prc", "0")),
                 "change_pct": item.get("flu_rt", "0.00"),
+                "change_amt": _parse_price(item.get("pred_pre", "0")),
                 "extra": f'{int(item.get("trde_prica","0")):,}백만',
             }
             for i, item in enumerate(data.get("trde_prica_upper", [])[:100])
@@ -327,6 +434,7 @@ async def get_ranking(rank_type: str) -> list[dict]:
                 "name": item["stk_nm"],
                 "price": _parse_price(item.get("cur_prc", "0")),
                 "change_pct": item.get("flu_rt", "0.00"),
+                "change_amt": _parse_price(item.get("pred_pre", "0")),
                 "extra": item.get("sdnin_rt", ""),
             }
             for i, item in enumerate(data.get("trde_qty_sdnin", [])[:100])
@@ -346,7 +454,8 @@ async def get_ranking(rank_type: str) -> list[dict]:
                 "name": item["stk_nm"],
                 "price": _parse_price(item.get("cur_prc", "0")),
                 "change_pct": item.get("flu_rt", "0.00"),
-                "extra": item.get("pred_pre", ""),
+                "change_amt": _parse_price(item.get("pred_pre", "0")),
+                "extra": None,
             }
             for i, item in enumerate(data.get("pred_pre_flu_rt_upper", [])[:100])
         ]
@@ -400,6 +509,7 @@ async def get_ranking(rank_type: str) -> list[dict]:
                 "name": item["stk_nm"],
                 "price": _parse_price(item.get("close_pric", "0")),
                 "change_pct": item.get("pre_rt", "0.00"),
+                "change_amt": _parse_price(item.get("pred_pre", "0")),
                 "extra": f'NAV {item.get("nav","")}',
             }
             for i, item in enumerate(items[:30])

@@ -34,7 +34,6 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        // 정적 자산은 캐시에 저장
         if (res.ok && e.request.method === "GET") {
           const clone = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
@@ -42,5 +41,38 @@ self.addEventListener("fetch", (e) => {
         return res;
       })
       .catch(() => caches.match(e.request))
+  );
+});
+
+// ── Web Push 수신 ──
+self.addEventListener("push", (e) => {
+  if (!e.data) return;
+  const payload = e.data.json();
+  const title = payload.title || "오늘 날이가";
+  const options = {
+    body: payload.body || "",
+    icon: "/logo.png",
+    badge: "/logo.png",
+    data: payload,
+    vibrate: [200, 100, 200],
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+// ── 알림 클릭 시 앱 열기 ──
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const stockCode = e.notification.data?.stock_code;
+  const url = stockCode ? `/chart/${stockCode}` : "/";
+  e.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      const existing = list.find((c) => c.url.includes(self.location.origin));
+      if (existing) {
+        existing.focus();
+        existing.navigate(url);
+      } else {
+        clients.openWindow(url);
+      }
+    })
   );
 });

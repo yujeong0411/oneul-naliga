@@ -13,8 +13,9 @@ class Settings(BaseSettings):
     kis_app_key: Optional[str] = None
     kis_app_secret: Optional[str] = None
 
-    telegram_bot_token: Optional[str] = None
-    telegram_chat_id: Optional[str] = None
+    vapid_private_key: Optional[str] = None
+    vapid_public_key: Optional[str] = None
+    vapid_email: Optional[str] = None
 
     kakao_rest_api_key: Optional[str] = None
     kakao_client_secret: Optional[str] = None

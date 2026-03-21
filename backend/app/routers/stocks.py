@@ -57,6 +57,46 @@ async def get_index_candles(code: str = Query(...), period: str = Query(default=
         raise HTTPException(status_code=502, detail=str(e))
 
 
+@router.get("/etf/{code}/info")
+async def get_etf_info(code: str):
+    """ETF 종목정보 (ka40002). 일반 주식이면 null 반환."""
+    try:
+        info = await kiwoom.get_etf_info(code)
+        return info  # None이면 null 반환
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/etf/{code}/daily")
+async def get_etf_daily(code: str):
+    """ETF 일별 NAV 추이 (ka40003)"""
+    try:
+        rows = await kiwoom.get_etf_daily(code)
+        return {"rows": rows}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/indices/domestic/candles")
+async def get_domestic_index_candles(inds_cd: str = Query(...), period: str = Query(default="D"), count: int = Query(default=600)):
+    """국내 지수 캔들 조회 (inds_cd: 001=KOSPI, 101=KOSDAQ, period: D|W|M|Y)"""
+    try:
+        candles = await kiwoom.get_domestic_index_candles(inds_cd, period, count)
+        return {"candles": [c.__dict__ for c in candles]}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.get("/indices/domestic/info")
+async def get_domestic_index_info(inds_cd: str = Query(...), mrkt_tp: str = Query(default="0")):
+    """국내 지수 현재가 상세 (inds_cd: 001=KOSPI, 101=KOSDAQ)"""
+    try:
+        info = await kiwoom.get_domestic_index_info(inds_cd, mrkt_tp)
+        return info
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @router.get("/ranking")
 async def get_ranking(type: str = Query(default="view")):
     """인기종목 랭킹 조회 (type: view|volume|amount|surge|rise|fall|foreign|institution|etf)"""
@@ -293,10 +333,10 @@ async def get_price(
     """현재가 조회"""
     try:
         if market in ("KOSPI", "KOSDAQ"):
-            price = await kiwoom.get_current_price(symbol)
+            result = await kiwoom.get_current_price(symbol)
         else:
-            price = await kis.get_current_price(symbol, exchange)
-        return {"symbol": symbol, "price": price}
+            result = await kis.get_current_price(symbol, exchange)
+        return {"symbol": symbol, "price": result["price"], "change_pct": result["change_pct"]}
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 

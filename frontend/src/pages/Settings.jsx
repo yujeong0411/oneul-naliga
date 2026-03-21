@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getWatchlist, removeStock } from "../api/stocks";
 import { useAuth } from "../context/AuthContext";
 import { useDarkMode } from "../hooks/useDarkMode";
+import { usePushNotification } from "../hooks/usePushNotification";
 
 const B = "1px solid var(--color-border-tertiary)";
 
@@ -48,6 +49,7 @@ function SectionLabel({ label }) {
 export default function Settings() {
   const { user, loginWithKakao, logout } = useAuth();
   const [dark, toggleDark] = useDarkMode();
+  const { supported: pushSupported, subscribed, loading: pushLoading, subscribe, unsubscribe, testPush } = usePushNotification(user?.id);
 
   // 관심종목
   const [watchlist, setWatchlist] = useState([]);
@@ -207,6 +209,42 @@ export default function Settings() {
               </div>
             }
           />
+        </Card>
+
+        {/* 알림 */}
+        <SectionLabel label="알림" />
+        <Card>
+          {pushSupported ? (
+            <Row
+              label="브라우저 푸시 알림"
+              sub={subscribed ? "선에 근접하면 알림을 보냅니다" : "알림을 허용하면 선 근접 시 알려드립니다"}
+              noBorder={!subscribed}
+              right={
+                <div onClick={pushLoading ? undefined : (subscribed ? unsubscribe : subscribe)} style={{
+                  width: 44, height: 26, borderRadius: 13, cursor: pushLoading ? "default" : "pointer",
+                  background: subscribed ? "#3a9e62" : "var(--color-border-secondary)",
+                  position: "relative", transition: "background 0.2s", flexShrink: 0, opacity: pushLoading ? 0.5 : 1,
+                }}>
+                  <div style={{
+                    position: "absolute", top: 3, left: subscribed ? 21 : 3,
+                    width: 20, height: 20, borderRadius: 10,
+                    background: "white", transition: "left 0.2s",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                  }} />
+                </div>
+              }
+            />
+          ) : (
+            <Row label="브라우저 푸시 알림" sub="이 브라우저는 푸시 알림을 지원하지 않습니다" noBorder right={null} />
+          )}
+          {subscribed && (
+            <Row
+              label="테스트 알림 보내기"
+              noBorder
+              onClick={testPush}
+              right={<span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>›</span>}
+            />
+          )}
         </Card>
 
         {/* 앱 정보 */}

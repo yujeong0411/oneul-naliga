@@ -307,7 +307,12 @@ async def get_current_price(symbol: str, exchange: str = "NAS") -> float:
         resp.raise_for_status()
         data = resp.json()
 
-    return float(data["output"]["last"])
+    output = data["output"]
+    return {
+        "price":      float(output["last"]),
+        "change_pct": output.get("rate", "0.00"),
+        "change_amt": abs(float(output.get("diff", "0") or "0")),
+    }
 
 
 async def get_fx_rates() -> list[dict]:
@@ -496,12 +501,14 @@ async def get_overseas_ranking(rank_type: str, exchange: str = "NAS") -> list[di
             tomv = item.get("tomv", "")
             extra = f"${int(float(tomv)):,}" if tomv else None
 
+        diff_str = item.get("diff", "0") or "0"
         results.append({
             "rank": int(item.get("rank", i + 1)),
             "code": item.get("symb", ""),
             "name": item.get("name", item.get("ename", "")),
             "price": float(price_str) if price_str else None,
             "change_pct": rate_str,
+            "change_amt": abs(float(diff_str)) if diff_str else None,
             "extra": extra,
             "exchange": item.get("_excd", exchange),  # 실제 거래소 코드
         })
@@ -548,6 +555,7 @@ async def get_us_indices() -> list[dict]:
                     "name": idx["name"],
                     "value": float(output1.get("ovrs_nmix_prpr", "0")),
                     "change_pct": output1.get("prdy_ctrt", "0.00"),
+                    "pred_pre": abs(float(output1.get("ovrs_nmix_prdy_vrss", "0") or "0")),
                 })
         except Exception as e:
             print(f"[kis] 지수 {idx['name']} 조회 실패: {e}")

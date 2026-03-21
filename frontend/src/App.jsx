@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import Home from "./pages/Home";
 import ChartDetail from "./pages/ChartDetail";
 import IndexDetail from "./pages/IndexDetail";
+import DomesticIndexDetail from "./pages/DomesticIndexDetail";
 import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
 import SplashScreen from "./components/SplashScreen";
@@ -245,7 +246,8 @@ function AppLayout() {
         <Routes>
           <Route path="/"              element={<Home />} />
           <Route path="/chart/:code"   element={<ChartDetail />} />
-          <Route path="/index/:id"     element={<IndexDetail />} />
+          <Route path="/index/:id"        element={<IndexDetail />} />
+          <Route path="/domestic/:id"     element={<DomesticIndexDetail />} />
           <Route path="/alerts"        element={<Alerts />} />
           <Route path="/settings"      element={<Settings />} />
           <Route path="/auth/callback" element={<AuthCallback />} />

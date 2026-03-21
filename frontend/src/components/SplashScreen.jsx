@@ -39,7 +39,7 @@ export default function SplashScreen({ onComplete, ready }) {
         alignItems: "center",
         animation: "splashIn 0.4s ease forwards",
         textAlign: "center",
-        marginBottom: "15vh",
+        marginBottom: "8vh",
       }}>
         <img
           src="/logo.png"
@@ -48,14 +48,14 @@ export default function SplashScreen({ onComplete, ready }) {
         />
         <h1 style={{
           margin: 0, fontSize: 26, fontWeight: 800,
-          color: "#111827",
+          color: "var(--color-text-primary)",
           letterSpacing: "-0.5px",
         }}>
           오늘 날이가
         </h1>
         <p style={{
           margin: "10px 0 0", fontSize: 16,
-          color: "#6b7280",
+          color: "var(--color-text-secondary)",
           fontWeight: 400,
         }}>
           오늘 하루도 건승하세요!

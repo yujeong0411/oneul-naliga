@@ -163,10 +163,10 @@ button {
 }
 
 .splash-bg {
-  background: linear-gradient(160deg, #eef8f4 0%, #f2f0f9 50%, #fdf1ef 100%);
+  background: linear-gradient(160deg, #c8f0e0 0%, #ddd6f9 50%, #fcd5cc 100%);
 }
 [data-theme="dark"] .splash-bg {
-  background: linear-gradient(160deg, #eef8f4 0%, #f2f0f9 50%, #fdf1ef 100%);
+  background: linear-gradient(160deg, #0d3d2a 0%, #1e1640 50%, #3d1a14 100%);
 }
 
 [data-theme="dark"] .glass {

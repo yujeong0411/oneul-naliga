@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 import pytz
 
 from app.database import get_supabase
-from app.services import kiwoom, kis, telegram
+from app.services import kiwoom, kis, push
 from app.services.kiwoom_ws import stream_prices
 
 KST = pytz.timezone("Asia/Seoul")
@@ -52,15 +52,27 @@ async def check_and_alert(line: dict, current_price: float) -> None:
     if recent:
         return
 
-    await telegram.send_alert(line, current_price, target, diff_pct)
+    signal_label = "저항선" if line.get("signal_type") == "attack" else "지지선"
+    stock_code = line["stock_code"]
+    is_domestic = stock_code.isdigit() and len(stock_code) == 6
+    price_fmt = f"{current_price:,.0f}원" if is_domestic else f"${current_price:,.2f}"
+
+    user_id = line.get("user_id")
+    await push.broadcast(
+        user_id=user_id,
+        title=f"[{stock_code}] {signal_label} 도달",
+        body=f"현재가 {price_fmt} · 거리 {diff_pct:.2f}%",
+        data={"stock_code": stock_code, "signal_type": line.get("signal_type")},
+    )
 
     db.table("alerts").insert({
-        "stock_code":    line["stock_code"],
+        "stock_code":    stock_code,
         "line_id":       line["id"],
         "signal_type":   line["signal_type"],
         "current_price": current_price,
         "target_price":  target,
         "distance_pct":  diff_pct,
+        "user_id":       user_id,
     }).execute()
 
 
@@ -149,10 +161,10 @@ async def daily_monitor() -> None:
             code = line["stock_code"]
             try:
                 if code.isdigit() and len(code) == 6:
-                    price = await kiwoom.get_current_price(code)
+                    result = await kiwoom.get_current_price(code)
                 else:
-                    price = await kis.get_current_price(code)
-                await check_and_alert(line, price)
+                    result = await kis.get_current_price(code)
+                await check_and_alert(line, result["price"])
             except Exception as e:
                 print(f"[daily_monitor] {code} 오류: {e}")
 

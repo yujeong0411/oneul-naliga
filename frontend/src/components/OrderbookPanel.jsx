@@ -232,48 +232,6 @@ export default function OrderbookPanel({ market, code, exchange = "NAS", onSaveS
         );
       })}
 
-      {/* 지지/저항 자동 탐지 요약 */}
-      {supportResistance.length > 0 && (
-        <div style={{ padding: "10px 16px", borderTop: B }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 8 }}>
-            호가 기반 지지/저항 ({supportResistance.length})
-          </div>
-          {supportResistance.map((sr, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "6px 0",
-                borderBottom: i < supportResistance.length - 1 ? `1px solid var(--color-background-secondary)` : "none",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: sr.type === "resistance" ? "#5b8def" : "#ef5b5b",
-                }} />
-                <span style={{ fontWeight: 600, color: "var(--color-text-primary)", fontVariantNumeric: "tabular-nums" }}>
-                  {sr.price.toLocaleString()}원
-                </span>
-                <span style={{ fontSize: 10, color: "var(--color-text-tertiary)" }}>
-                  ({sr.quantity.toLocaleString()}주, {sr.ratio}x)
-                </span>
-              </div>
-              <button
-                onClick={() => onSaveSupportResistance?.(sr)}
-                style={{
-                  fontSize: 10, padding: "4px 10px", borderRadius: 16,
-                  background: sr.type === "resistance" ? "rgba(91, 141, 239, 0.12)" : "rgba(239, 91, 91, 0.12)",
-                  color: sr.type === "resistance" ? "#5b8def" : "#ef5b5b",
-                  border: "none", cursor: "pointer", fontWeight: 600,
-                }}
-              >
-                알림 설정
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

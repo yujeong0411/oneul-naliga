@@ -6,7 +6,7 @@ import EditLineSheet from "../components/EditLineSheet";
 import AutoDetectPanel from "../components/AutoDetectPanel";
 import OrderbookPanel from "../components/OrderbookPanel";
 import InvestorPanel from "../components/InvestorPanel";
-import { getCandles, getPrice, detectMarket, searchStocks, getWatchlist, addStock, removeStock } from "../api/stocks";
+import { getCandles, getPrice, detectMarket, searchStocks, getWatchlist, addStock, removeStock, getOrderbook, getEtfInfo, getEtfDaily } from "../api/stocks";
 import { useLivePrice } from "../hooks/useLivePrice";
 import { useOrderbook } from "../hooks/useOrderbook";
 import { getLines, createLine, updateLine, deleteLine } from "../api/lines";
@@ -97,11 +97,39 @@ export default function ChartDetail() {
   const [exchange, setExchange] = useState(location.state?.exchange || "NAS");
   const [isWatchlisted, setIsWatchlisted] = useState(false);
   const [chartLoading, setChartLoading] = useState(false);
+  const [etfInfo, setEtfInfo] = useState(null);   // null = 미확인, false = ETF 아님
+  const [etfNav, setEtfNav] = useState([]);
 
   const isDomestic = /^\d{6}$/.test(code);
   const { price: livePrice, change_pct: liveChangePct } = useLivePrice(code, exchange);
-  const { supportResistance: obSR } = useOrderbook(code, exchange);
+  const { supportResistance: wsSR } = useOrderbook(code, exchange);
+  const [restSR, setRestSR] = useState([]);
 
+  // REST 호가로 SR 계산 (장외시간 폴백)
+  useEffect(() => {
+    if (!isDomestic) return;
+    getOrderbook(market, code)
+      .then((data) => {
+        const all = [...(data.asks || []), ...(data.bids || [])];
+        if (all.length === 0) return;
+        const avg = all.reduce((s, e) => s + e.quantity, 0) / all.length;
+        const threshold = avg * 3;
+        setRestSR(
+          all
+            .filter((e) => e.quantity >= threshold && e.price > 0)
+            .map((e) => ({
+              price: e.price,
+              quantity: e.quantity,
+              type: (data.asks || []).some((a) => a.price === e.price) ? "resistance" : "support",
+              ratio: (e.quantity / avg).toFixed(1),
+            }))
+        );
+      })
+      .catch(() => {});
+  }, [code, market, isDomestic]);
+
+  // WebSocket 데이터 우선, 없으면 REST 폴백
+  const obSR = wsSR.length > 0 ? wsSR : restSR;
 
   // ── 데이터 로드 ────────────────────────────
 
@@ -124,6 +152,17 @@ export default function ChartDetail() {
       .catch(() => { })
       .finally(() => setChartLoading(false));
   }, [code, market, timeframe]);
+
+  // ETF 감지 및 NAV 로드
+  useEffect(() => {
+    if (!isDomestic) return;
+    getEtfInfo(code)
+      .then((info) => {
+        setEtfInfo(info || false);
+        if (info) getEtfDaily(code).then((d) => setEtfNav(d.rows || [])).catch(() => {});
+      })
+      .catch(() => setEtfInfo(false));
+  }, [code]);
 
   useEffect(() => {
     getPrice(market, code, exchange)
@@ -582,7 +621,7 @@ export default function ChartDetail() {
                 {isDomestic ? displayPrice.toLocaleString() + "원" : "$" + displayPrice.toLocaleString()}
               </p>
               <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: priceChange >= 0 ? "var(--color-rise)" : "var(--color-fall)" }}>
-                {priceChange >= 0 ? "+" : ""}{pctChange}%
+                {priceChange >= 0 ? "▲" : "▼"}{Math.abs(priceChange).toLocaleString()} ({priceChange >= 0 ? "+" : ""}{pctChange}%)
               </p>
             </div>
           </div>
@@ -605,8 +644,34 @@ export default function ChartDetail() {
             {isDomestic ? displayPrice.toLocaleString() + "원" : "$" + displayPrice.toLocaleString()}
           </span>
           <span style={{ fontSize: 15, fontWeight: 600, color: priceChange >= 0 ? "var(--color-rise)" : "var(--color-fall)" }}>
-            {priceChange >= 0 ? "+" : ""}{pctChange}%
+            {priceChange >= 0 ? "▲" : "▼"}{Math.abs(priceChange).toLocaleString()} ({priceChange >= 0 ? "+" : ""}{pctChange}%)
           </span>
+        </div>
+      )}
+
+      {/* ETF 정보 */}
+      {etfInfo && (
+        <div style={{
+          display: "flex", gap: 8, padding: isMobile ? "10px 20px" : "10px 32px",
+          background: "var(--color-background-secondary)", borderBottom: B, flexWrap: "wrap", alignItems: "center",
+        }}>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, background: "var(--color-background-info)", color: "var(--color-text-info)" }}>ETF</span>
+          {etfNav[0]?.nav != null && (
+            <>
+              <span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>NAV</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                {etfNav[0].nav.toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}원
+              </span>
+              {etfNav[0].nav_diff && etfNav[0].nav_diff !== "0.00" && (
+                <span style={{ fontSize: 11, color: etfNav[0].nav_diff.startsWith("-") ? "var(--color-fall)" : "var(--color-rise)" }}>
+                  (NAV-ETF {etfNav[0].nav_diff}%)
+                </span>
+              )}
+            </>
+          )}
+          {etfInfo.txon_type && (
+            <span style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginLeft: "auto" }}>{etfInfo.txon_type}</span>
+          )}
         </div>
       )}
 

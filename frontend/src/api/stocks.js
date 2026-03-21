@@ -39,6 +39,12 @@ export const getOverseasRanking = (type = "rise", exchange = "NAS") =>
 export const getIndexCandles = (code, period = "D", count = 200) =>
   fetch(`${BASE}/stocks/indices/candles?code=${encodeURIComponent(code)}&period=${period}&count=${count}`).then((r) => r.json());
 
+export const getDomesticIndexCandles = (inds_cd, period = "D", count = 600) =>
+  fetch(`${BASE}/stocks/indices/domestic/candles?inds_cd=${inds_cd}&period=${period}&count=${count}`).then((r) => r.json());
+
+export const getDomesticIndexInfo = (inds_cd, mrkt_tp = "0") =>
+  fetch(`${BASE}/stocks/indices/domestic/info?inds_cd=${inds_cd}&mrkt_tp=${mrkt_tp}`).then((r) => r.json());
+
 // ── 시장 지수 ─────────────────────────────────────
 
 export const getIndices = () =>
@@ -76,6 +82,14 @@ export const getOrderbook = (market, symbol, exchange = "NAS") =>
 
 export const getPeaks = (market, symbol, n = 10) =>
   fetch(`${BASE}/stocks/${market}/${symbol}/peaks?n=${n}`).then((r) => r.json());
+
+// ── ETF ──────────────────────────────────────────
+
+export const getEtfInfo = (code) =>
+  fetch(`${BASE}/stocks/etf/${code}/info`).then((r) => r.json());
+
+export const getEtfDaily = (code) =>
+  fetch(`${BASE}/stocks/etf/${code}/daily`).then((r) => r.json());
 
 // ── 유틸: 종목코드로 market 자동 판별 ────────────
 
