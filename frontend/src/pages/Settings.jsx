@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getWatchlist, removeStock } from "../api/stocks";
 import { useAuth } from "../context/AuthContext";
 import { useDarkMode } from "../hooks/useDarkMode";
 import { usePushNotification } from "../hooks/usePushNotification";
@@ -51,20 +50,6 @@ export default function Settings() {
   const [dark, toggleDark] = useDarkMode();
   const { supported: pushSupported, subscribed, loading: pushLoading, subscribe, unsubscribe, testPush } = usePushNotification(user?.id);
 
-  // 관심종목
-  const [watchlist, setWatchlist] = useState([]);
-  const [showWatchlist, setShowWatchlist] = useState(false);
-
-  useEffect(() => {
-    if (showWatchlist) {
-      getWatchlist(user?.id).then(setWatchlist).catch(() => {});
-    }
-  }, [showWatchlist, user?.id]);
-
-  const handleRemove = async (code) => {
-    await removeStock(code, user?.id).catch(() => {});
-    setWatchlist((prev) => prev.filter((s) => s.code !== code));
-  };
 
   const pad = "0 20px";
 
@@ -141,53 +126,6 @@ export default function Settings() {
       {/* 나머지 섹션 */}
       <div style={{ padding: pad }}>
 
-        {/* 관심종목 관리 */}
-        <SectionLabel label="관심종목" />
-        <Card>
-          <Row
-            label="관심종목 관리"
-            sub={watchlist.length > 0 ? `${watchlist.length}개 등록됨` : "목록 보기"}
-            onClick={() => setShowWatchlist((v) => !v)}
-            noBorder={!showWatchlist || watchlist.length === 0}
-            right={
-              <span style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
-                {showWatchlist ? "▲" : "▼"}
-              </span>
-            }
-          />
-          {showWatchlist && watchlist.map((s, i) => (
-            <div key={s.code} style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "11px 16px",
-              borderBottom: i < watchlist.length - 1 ? B : "none",
-              background: "var(--color-background-secondary)",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>{s.name}</span>
-                <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{s.code}</span>
-                <span style={{
-                  fontSize: 9, padding: "2px 6px", borderRadius: 4, fontWeight: 600,
-                  background: s.market === "해외" ? "var(--color-background-info)" : "var(--color-background-success)",
-                  color: s.market === "해외" ? "var(--color-text-info)" : "var(--color-text-success)",
-                }}>
-                  {s.market === "해외" ? "US" : "KR"}
-                </span>
-              </div>
-              <button onClick={() => handleRemove(s.code)} style={{
-                border: "none", background: "none", cursor: "pointer",
-                fontSize: 12, color: "var(--color-text-danger)", fontWeight: 600, padding: "4px 8px",
-              }}>
-                삭제
-              </button>
-            </div>
-          ))}
-          {showWatchlist && watchlist.length === 0 && (
-            <p style={{ padding: "16px", textAlign: "center", fontSize: 13, color: "var(--color-text-tertiary)", margin: 0 }}>
-              등록된 관심종목이 없습니다
-            </p>
-          )}
-        </Card>
-
         {/* 화면 */}
         <SectionLabel label="화면" />
         <Card>
@@ -214,7 +152,16 @@ export default function Settings() {
         {/* 알림 */}
         <SectionLabel label="알림" />
         <Card>
-          {pushSupported ? (
+          {!pushSupported ? (
+            <Row label="브라우저 푸시 알림" sub="이 브라우저는 푸시 알림을 지원하지 않습니다" noBorder right={null} />
+          ) : pushLoading === false && Notification.permission === "denied" ? (
+            <Row
+              label="브라우저 푸시 알림"
+              sub="브라우저에서 알림이 차단되어 있어요. 주소창 자물쇠 → 알림 → 허용으로 변경해 주세요."
+              noBorder
+              right={null}
+            />
+          ) : (
             <Row
               label="브라우저 푸시 알림"
               sub={subscribed ? "선에 근접하면 알림을 보냅니다" : "알림을 허용하면 선 근접 시 알려드립니다"}
@@ -234,8 +181,6 @@ export default function Settings() {
                 </div>
               }
             />
-          ) : (
-            <Row label="브라우저 푸시 알림" sub="이 브라우저는 푸시 알림을 지원하지 않습니다" noBorder right={null} />
           )}
           {subscribed && (
             <Row

@@ -54,12 +54,12 @@ function ChangeText({ change, style }) {
   );
 }
 
-function SectionTitle({ title, action, onAction }) {
+function SectionTitle({ title, action, onAction, actionActive }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
       <span style={{ fontSize: 17, fontWeight: 800, color: "var(--color-text-primary)", letterSpacing: "-0.4px" }}>{title}</span>
       {action && (
-        <button onClick={onAction} style={{ border: "none", background: "var(--color-background-tertiary)", cursor: "pointer", fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 600, padding: "5px 12px", borderRadius: 8 }}>
+        <button onClick={onAction} style={{ border: "none", background: actionActive ? "var(--color-text-primary)" : "var(--color-background-tertiary)", cursor: "pointer", fontSize: 12, color: actionActive ? "var(--color-background-primary)" : "var(--color-text-secondary)", fontWeight: 600, padding: "5px 12px", borderRadius: 8, transition: "background 0.15s, color 0.15s" }}>
           {action}
         </button>
       )}
@@ -294,9 +294,25 @@ export default function Home() {
   const [newsKeywords, setNewsKeywords] = useState(loadKeywords);
   const [showKeywordEdit, setShowKeywordEdit] = useState(false);
   const [keywordInput, setKeywordInput] = useState("");
+  const keywordPanelRef = useRef(null);
   const [showAllNews, setShowAllNews] = useState(false);
   const todayKey = `maintenance_dismissed_${new Date().toISOString().slice(0, 10)}`;
   const alreadyDismissed = localStorage.getItem(todayKey) === "1";
+
+  useEffect(() => {
+    if (!showKeywordEdit) return;
+    const handler = (e) => {
+      if (keywordPanelRef.current && !keywordPanelRef.current.contains(e.target)) {
+        setShowKeywordEdit(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [showKeywordEdit]);
   const [marketData,     setMarketData]     = useState({});
   const [marketSettings, setMarketSettings] = useState(loadMarketSettings);
   const [showMarketEdit, setShowMarketEdit] = useState(false);
@@ -428,7 +444,8 @@ export default function Home() {
 
           {/* 뉴스 */}
           <section style={{ padding: isMobile ? "20px 20px 0" : isPC ? "20px 0 0" : "20px 24px 0" }}>
-            <SectionTitle title="금융 뉴스" action="키워드 설정" onAction={() => setShowKeywordEdit((v) => !v)} />
+            <div ref={keywordPanelRef}>
+            <SectionTitle title="금융 뉴스" action="키워드 설정" onAction={() => setShowKeywordEdit((v) => !v)} actionActive={showKeywordEdit} />
 
             {/* 키워드 편집 패널 */}
             {showKeywordEdit && (
@@ -484,6 +501,7 @@ export default function Home() {
                 </div>
               </div>
             )}
+            </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {newsLoading ? (

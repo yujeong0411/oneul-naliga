@@ -31,7 +31,10 @@ export function usePushNotification(userId) {
       if (perm !== "granted") return;
 
       // VAPID 공개키 가져오기
-      const { public_key } = await fetch(`${API_URL}/api/alerts/push/vapid-public-key`).then((r) => r.json());
+      const vapidRes = await fetch(`${API_URL}/api/alerts/push/vapid-public-key`);
+      if (!vapidRes.ok) throw new Error(`VAPID 키 조회 실패 (${vapidRes.status})`);
+      const { public_key } = await vapidRes.json();
+      if (!public_key) throw new Error("VAPID 공개키 없음");
 
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
