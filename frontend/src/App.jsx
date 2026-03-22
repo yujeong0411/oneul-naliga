@@ -12,6 +12,8 @@ import Settings from "./pages/Settings";
 import Watchlist from "./pages/Watchlist";
 import SplashScreen from "./components/SplashScreen";
 import { useAlertCount } from "./hooks/useAlertCount";
+import { getIndices, getFX } from "./api/stocks";
+import { prefetchCache } from "./prefetchCache";
 import SearchOverlay from "./components/SearchOverlay";
 import { useDarkMode } from "./hooks/useDarkMode";
 
@@ -327,6 +329,16 @@ function AppLayout() {
 function AppWithSplash() {
   const { loading: authLoading } = useAuth();
   const [splashDone, setSplashDone] = useState(false);
+
+  // 스플래시 중 홈 데이터 프리페치
+  useEffect(() => {
+    Promise.all([
+      getIndices().catch(() => ({ data: [], errors: [] })),
+      getFX().catch(() => []),
+    ]).then(([indicesResult, fxData]) => {
+      prefetchCache.marketData = { indicesResult, fxData };
+    });
+  }, []);
 
   return (
     <>

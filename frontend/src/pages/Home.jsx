@@ -13,6 +13,7 @@ function useBreakpoint() {
   return bp;
 }
 import { getRanking, getOverseasRanking, getIndices, getFX } from "../api/stocks";
+import { prefetchCache } from "../prefetchCache";
 import { MARKET_ITEMS, loadMarketSettings, saveMarketSettings } from "../config/marketItems";
 import { useAuth } from "../context/AuthContext";
 
@@ -318,12 +319,9 @@ export default function Home() {
     }
   };
 
-  // 지수 + 환율 로드 → 통합 marketData
+  // 지수 + 환율 로드 → 통합 marketData (프리페치 캐시 우선)
   useEffect(() => {
-    Promise.all([
-      getIndices().catch(() => ({ data: [], errors: [] })),
-      getFX().catch(() => []),
-    ]).then(([indicesResult, fxData]) => {
+    const apply = (indicesResult, fxData) => {
       const { data: indicesData, errors } = indicesResult;
       if (errors.length > 0 && !alreadyDismissed) setApiErrors(errors);
       const merged = {};
@@ -335,7 +333,18 @@ export default function Home() {
         merged[currency] = { value: item.value, unit: item.unit, change_pct: item.change_pct || null };
       });
       setMarketData(merged);
-    });
+    };
+
+    if (prefetchCache.marketData) {
+      const { indicesResult, fxData } = prefetchCache.marketData;
+      apply(indicesResult, fxData);
+      prefetchCache.marketData = null;
+    } else {
+      Promise.all([
+        getIndices().catch(() => ({ data: [], errors: [] })),
+        getFX().catch(() => []),
+      ]).then(([indicesResult, fxData]) => apply(indicesResult, fxData));
+    }
   }, []);
 
   useEffect(() => {

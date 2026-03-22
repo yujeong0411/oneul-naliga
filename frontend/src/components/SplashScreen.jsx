@@ -1,16 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 
+const MIN_MS = 2000;
+
 export default function SplashScreen({ onComplete, ready }) {
   const [hiding, setHiding] = useState(false);
+  const [progress, setProgress] = useState(0);
   const minShown = useRef(false);
+  const startRef = useRef(Date.now());
+  const rafRef = useRef(null);
 
-  // 최소 800ms 후 && auth ready 되면 페이드아웃, 최대 3초 안전망
+  // 로딩바 애니메이션 (0 → 100 over MIN_MS, 이후 멈춤)
+  useEffect(() => {
+    const tick = () => {
+      const elapsed = Date.now() - startRef.current;
+      const pct = Math.min((elapsed / MIN_MS) * 100, 100);
+      setProgress(pct);
+      if (pct < 100) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  // 최소 2초 후 && auth ready → 페이드아웃, 최대 5초 안전망
   useEffect(() => {
     const t1 = setTimeout(() => {
       minShown.current = true;
       if (ready) setHiding(true);
-    }, 800);
-    const t2 = setTimeout(() => setHiding(true), 3000); // 안전망
+    }, MIN_MS);
+    const t2 = setTimeout(() => setHiding(true), 5000);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
@@ -60,6 +79,20 @@ export default function SplashScreen({ onComplete, ready }) {
         }}>
           오늘 하루도 건승하세요!
         </p>
+
+        {/* 로딩바 */}
+        <div style={{
+          marginTop: 32, width: 160, height: 3,
+          borderRadius: 99, background: "var(--color-border-primary)",
+          overflow: "hidden",
+        }}>
+          <div style={{
+            height: "100%", borderRadius: 99,
+            background: "linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899)",
+            width: `${progress}%`,
+            transition: "width 0.05s linear",
+          }} />
+        </div>
       </div>
     </div>
   );
