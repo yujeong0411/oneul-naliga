@@ -466,6 +466,112 @@ async def get_indicators(body: IndicatorRequest):
 
 
 # ─────────────────────────────────────────
+# 일목균형표 차트 데이터
+# ─────────────────────────────────────────
+
+@router.post("/ichimoku")
+async def get_ichimoku_chart(body: IndicatorRequest):
+    """일목균형표 차트용 시계열 데이터 반환"""
+    import pandas as pd
+    import pandas_ta as ta
+
+    try:
+        ct = body.candle_type
+        if ct == "D":
+            candles = await kiwoom.get_daily_candles(body.code, count=300)
+        elif ct == "W":
+            candles = await kiwoom.get_weekly_candles(body.code, count=150)
+        elif ct == "M":
+            candles = await kiwoom.get_monthly_candles(body.code, count=120)
+        else:
+            interval = int(ct)
+            candles = await kiwoom.get_minute_candles(body.code, interval=interval, count=300)
+
+        if not candles or len(candles) < 52:
+            raise HTTPException(status_code=400, detail="데이터 부족 (최소 52봉)")
+
+        # candles: 최신→과거, DataFrame은 과거→최신
+        asc = list(reversed(candles))
+        rows = [{"date": c.date, "open": c.open, "high": c.high,
+                 "low": c.low, "close": c.close, "volume": c.volume} for c in asc]
+        df = pd.DataFrame(rows)
+        df["close"] = df["close"].astype(float)
+        df["high"] = df["high"].astype(float)
+        df["low"] = df["low"].astype(float)
+
+        ichi = df.ta.ichimoku(tenkan=9, kijun=26, senkou=52, append=False)
+        if ichi is None:
+            raise HTTPException(status_code=500, detail="일목균형표 계산 실패")
+
+        ichi_df = ichi[0] if isinstance(ichi, tuple) else ichi
+        span_df = ichi[1] if isinstance(ichi, tuple) and len(ichi) > 1 else None
+
+        tenkan_col = [c for c in ichi_df.columns if c.startswith("ITS_")]
+        kijun_col = [c for c in ichi_df.columns if c.startswith("IKS_")]
+        span_a_col = [c for c in ichi_df.columns if c.startswith("ISA_")]
+        span_b_col = [c for c in ichi_df.columns if c.startswith("ISB_")]
+
+        def series_to_list(series, dates):
+            result = []
+            for i, v in enumerate(series):
+                if pd.notna(v) and i < len(dates):
+                    result.append({"date": dates[i], "value": round(float(v))})
+            return result
+
+        dates = [c.date for c in asc]
+
+        data = {
+            "tenkan": series_to_list(ichi_df[tenkan_col[0]], dates) if tenkan_col else [],
+            "kijun": series_to_list(ichi_df[kijun_col[0]], dates) if kijun_col else [],
+            "chikou": [],  # 후행스팬: 현재 종가를 26봉 전에 표시
+        }
+
+        # 선행스팬 A/B: ichi_df에 현재까지, span_df에 미래 26봉
+        if span_a_col and span_b_col:
+            span_a_current = series_to_list(ichi_df[span_a_col[0]], dates)
+            span_b_current = series_to_list(ichi_df[span_b_col[0]], dates)
+
+            # 미래 구름 (span_df)
+            if span_df is not None:
+                future_a_col = [c for c in span_df.columns if c.startswith("ISA_")]
+                future_b_col = [c for c in span_df.columns if c.startswith("ISB_")]
+                if future_a_col and future_b_col:
+                    # 미래 날짜 추정 (마지막 캔들 간격 기준)
+                    if len(dates) >= 2:
+                        last_date = dates[-1]
+                        # 날짜 간격 추정 (일봉 기준 1일)
+                        for fi in range(len(span_df)):
+                            a_v = span_df[future_a_col[0]].iloc[fi]
+                            b_v = span_df[future_b_col[0]].iloc[fi]
+                            if pd.notna(a_v) and pd.notna(b_v):
+                                # 미래 날짜 생성
+                                from datetime import datetime, timedelta
+                                base = datetime.strptime(last_date[:8], "%Y%m%d")
+                                future_date = base + timedelta(days=fi + 1)
+                                fd = future_date.strftime("%Y%m%d")
+                                span_a_current.append({"date": fd, "value": round(float(a_v))})
+                                span_b_current.append({"date": fd, "value": round(float(b_v))})
+
+            data["senkou_a"] = span_a_current
+            data["senkou_b"] = span_b_current
+
+        # 후행스팬: 종가를 26봉 전에 표시
+        for i in range(len(df)):
+            target_idx = i - 26
+            if target_idx >= 0 and target_idx < len(dates):
+                data["chikou"].append({"date": dates[target_idx], "value": round(float(df["close"].iloc[i]))})
+
+        return data
+
+    except KiwoomMaintenanceError:
+        raise HTTPException(status_code=503, detail="서버 점검 중입니다")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+# ─────────────────────────────────────────
 # 지지 / 저항 자동 감지
 # ─────────────────────────────────────────
 

@@ -270,6 +270,80 @@ def _calc_ma_cross(df: pd.DataFrame) -> dict:
         return _indicator("MA크로스", "ma_cross", None, NEUTRAL, "판단 불가")
 
 
+def _calc_ichimoku(df: pd.DataFrame) -> dict:
+    """일목균형표 (Ichimoku Cloud) 계산"""
+    if len(df) < 52:
+        return _indicator("일목균형표", "ichimoku", None, NEUTRAL, "데이터 부족 (최소 52봉 필요)")
+
+    ichi = df.ta.ichimoku(tenkan=9, kijun=26, senkou=52, append=False)
+    if ichi is None or (isinstance(ichi, tuple) and ichi[0] is None):
+        return _indicator("일목균형표", "ichimoku", None, NEUTRAL, "계산 실패")
+
+    # pandas-ta ichimoku returns (df_ichi, df_span_future)
+    ichi_df = ichi[0] if isinstance(ichi, tuple) else ichi
+    span_df = ichi[1] if isinstance(ichi, tuple) and len(ichi) > 1 else None
+
+    # pandas-ta 표준 컬럼명: ITS_9, IKS_26, ISA_9, ISB_26
+    tenkan_cols = [c for c in ichi_df.columns if c.startswith("ITS_")]
+    kijun_cols = [c for c in ichi_df.columns if c.startswith("IKS_")]
+    span_a_cols = [c for c in ichi_df.columns if c.startswith("ISA_")]
+    span_b_cols = [c for c in ichi_df.columns if c.startswith("ISB_")]
+
+    tenkan_v = _safe(ichi_df[tenkan_cols[0]]) if tenkan_cols else None
+    kijun_v = _safe(ichi_df[kijun_cols[0]]) if kijun_cols else None
+
+    # 선행스팬: 현재 시점 기준 (ichi_df에 있는 값)
+    senkou_a = _safe(ichi_df[span_a_cols[0]]) if span_a_cols else None
+    senkou_b = _safe(ichi_df[span_b_cols[0]]) if span_b_cols else None
+
+    close = _safe(df["close"])
+    chikou = close  # 후행스팬 = 현재 종가 (26일 전으로 표시)
+
+    if any(v is None for v in [tenkan_v, kijun_v, senkou_a, senkou_b, close]):
+        return _indicator("일목균형표", "ichimoku", None, NEUTRAL, "데이터 부족")
+
+    # 구름 색상 판정
+    cloud_color = "green" if senkou_a > senkou_b else "red"
+
+    # 현재가 vs 구름대
+    cloud_top = max(senkou_a, senkou_b)
+    cloud_bottom = min(senkou_a, senkou_b)
+    if close > cloud_top:
+        price_vs_cloud = "above"
+    elif close < cloud_bottom:
+        price_vs_cloud = "below"
+    else:
+        price_vs_cloud = "inside"
+
+    # 신호 판정
+    if price_vs_cloud == "above" and tenkan_v > kijun_v:
+        signal = BUY
+        detail = "구름 위 + 전환선 > 기준선"
+    elif price_vs_cloud == "below" and tenkan_v < kijun_v:
+        signal = SELL
+        detail = "구름 아래 + 전환선 < 기준선"
+    else:
+        signal = NEUTRAL
+        pos_label = {"above": "위", "inside": "안", "below": "아래"}[price_vs_cloud]
+        detail = f"구름 {pos_label}"
+
+    cloud_thickness = abs(senkou_a - senkou_b)
+
+    result = _indicator("일목균형표", "ichimoku", tenkan_v, signal, detail)
+    result["ichimoku"] = {
+        "tenkan": round(tenkan_v),
+        "kijun": round(kijun_v),
+        "senkou_a": round(senkou_a),
+        "senkou_b": round(senkou_b),
+        "chikou": round(chikou),
+        "cloud_color": cloud_color,
+        "price_vs_cloud": price_vs_cloud,
+        "cloud_thickness": round(cloud_thickness),
+        "signal": signal,
+    }
+    return result
+
+
 def _calc_mansfield_rs(
     df: pd.DataFrame,
     benchmark_df: Optional[pd.DataFrame],
@@ -346,9 +420,10 @@ def _calculate_sync(
     ma_list = _calc_ma(df)
     ma_cross = _calc_ma_cross(df)
     mansfield = _calc_mansfield_rs(df, bench_df)
+    ichimoku = _calc_ichimoku(df)
 
     # 카테고리 분류
-    trend_indicators = [ma_cross, adx, macd] + ma_list
+    trend_indicators = [ma_cross, adx, macd, ichimoku] + ma_list
     momentum_indicators = [rsi, stoch, cci, roc]
     volatility_indicators = [bb, atr]
     rs_indicators = [mansfield]

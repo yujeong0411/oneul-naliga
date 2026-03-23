@@ -128,6 +128,54 @@ function CategoryGrid({ categories, onSelect, selected }) {
   );
 }
 
+// ── 일목균형표 상세 카드 ─────────────────────────────────
+function IchimokuCard({ ichimoku }) {
+  if (!ichimoku) return null;
+  const { tenkan, kijun, senkou_a, senkou_b, chikou, cloud_color, price_vs_cloud, cloud_thickness, signal } = ichimoku;
+  const fmt = (v) => v?.toLocaleString() ?? "—";
+  const cloudLabel = cloud_color === "green" ? "상승구름" : "하락구름";
+  const posLabel = { above: "구름 위", inside: "구름 안", below: "구름 아래" }[price_vs_cloud] || "—";
+
+  return (
+    <div style={{ margin: "0 16px 12px", padding: 14, borderRadius: 12, background: "var(--color-background-secondary)", border: "1.5px solid var(--color-border-primary)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)" }}>일목균형표</span>
+        <SignalBadge signal={signal} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+          <span style={{ color: "#00bcd4", fontWeight: 600 }}>전환선</span> {fmt(tenkan)}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+          <span style={{ color: "#ff9800", fontWeight: 600 }}>기준선</span> {fmt(kijun)}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+          <span style={{ color: "rgba(76,175,80,0.8)", fontWeight: 600 }}>선행A</span> {fmt(senkou_a)}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+          <span style={{ color: "rgba(239,83,80,0.8)", fontWeight: 600 }}>선행B</span> {fmt(senkou_b)}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+          <span style={{ color: "#ce93d8", fontWeight: 600 }}>후행스팬</span> {fmt(chikou)}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+          <span style={{ fontWeight: 600 }}>구름두께</span> {fmt(cloud_thickness)}
+        </div>
+      </div>
+      <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+          background: cloud_color === "green" ? "var(--color-signal-bg-buy)" : "var(--color-signal-bg-sell)",
+          color: cloud_color === "green" ? "var(--color-signal-buy)" : "var(--color-signal-sell)",
+        }}>
+          {cloudLabel}
+        </span>
+        <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{posLabel}</span>
+      </div>
+    </div>
+  );
+}
+
 // ── 지표 상세 리스트 ─────────────────────────────────────
 function IndicatorList({ indicators }) {
   return (
@@ -334,6 +382,12 @@ export default function IndicatorPanel({ code, market, timeframe = "일봉" }) {
               <IndicatorList indicators={displayData.categories[selectedCat].indicators} />
             </div>
           )}
+
+          {/* 일목균형표 카드 */}
+          {(() => {
+            const ichInd = displayData.categories?.trend?.indicators?.find((i) => i.key === "ichimoku");
+            return ichInd?.ichimoku ? <IchimokuCard ichimoku={ichInd.ichimoku} /> : null;
+          })()}
 
           {/* 업데이트 시각 */}
           <div style={{ padding: "8px 20px 4px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>

@@ -85,6 +85,8 @@ export default function ChartDetail() {
   const [currentPrice, setCurrentPrice] = useState(null);
   const [timeframe, setTimeframe] = useState("일봉");
   const [showMA, setShowMA] = useState({ ma5: true, ma20: true, ma60: false });
+  const [showIchimoku, setShowIchimoku] = useState(false);
+  const ichimokuSeriesRef = useRef([]);
   const [drawMode, setDrawMode] = useState(false);
   const [drawPoints, setDrawPoints] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -282,6 +284,140 @@ export default function ChartDetail() {
     });
   }, [showMA, candles]);
 
+  // ── 일목균형표 오버레이 ─────────────────────
+
+  useEffect(() => {
+    if (!chartInstance.current) return;
+    const chart = chartInstance.current;
+    // 기존 시리즈 제거
+    ichimokuSeriesRef.current.forEach((s) => { try { chart.removeSeries(s); } catch {} });
+    ichimokuSeriesRef.current = [];
+
+    if (!showIchimoku || !isDomestic) return;
+
+    const candleType = timeframe === "주봉" ? "W" : timeframe === "월봉" || timeframe === "년봉" ? "M"
+      : timeframe.endsWith("분") ? timeframe.replace("분", "") : "D";
+
+    fetch(`${import.meta.env.VITE_API_URL || ""}/api/stocks/ichimoku`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, candle_type: candleType }),
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data || !chartInstance.current) return;
+        const chart = chartInstance.current;
+
+        // 현재 뷰 저장 (시리즈 추가로 인한 차트 축소 방지)
+        const savedRange = chart.timeScale().getVisibleLogicalRange();
+
+        const toTime = (d) => {
+          if (isIntraday) return toChartTime(d, true, false);
+          return d.replace(/(\d{4})(\d{2})(\d{2}).*/, "$1-$2-$3");
+        };
+        const mapSeries = (arr) => arr.map((p) => ({ time: toTime(p.date), value: p.value }));
+
+        // 전환선 (하늘색, 점선) — MA와 구분
+        if (data.tenkan?.length) {
+          const s = chart.addLineSeries({ color: "#00bcd4", lineWidth: 1, lineStyle: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          s.setData(mapSeries(data.tenkan));
+          ichimokuSeriesRef.current.push(s);
+        }
+        // 기준선 (주황색, 실선)
+        if (data.kijun?.length) {
+          const s = chart.addLineSeries({ color: "#ff9800", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          s.setData(mapSeries(data.kijun));
+          ichimokuSeriesRef.current.push(s);
+        }
+        // 후행스팬 (연보라, 점선)
+        if (data.chikou?.length) {
+          const s = chart.addLineSeries({ color: "#ce93d8", lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          s.setData(mapSeries(data.chikou));
+          ichimokuSeriesRef.current.push(s);
+        }
+        // 구름대: 선행스팬 A/B 사이 채우기
+        if (data.senkou_a?.length && data.senkou_b?.length) {
+          const aData = mapSeries(data.senkou_a);
+          const bData = mapSeries(data.senkou_b);
+          const BG = "#1e1e38";
+
+          // B를 시간 기준 맵으로 변환
+          const bMap = {};
+          bData.forEach((p) => { bMap[typeof p.time === "object" ? JSON.stringify(p.time) : p.time] = p.value; });
+
+          // 상단(max), 하단(min) 데이터 + 색상 구분
+          const topData = [];
+          const bottomData = [];
+          let lastIsGreen = null;
+          // 구간별로 색상이 바뀌는 지점 추적
+          const segments = []; // { start, end, green }
+          let segStart = 0;
+
+          aData.forEach((p, i) => {
+            const key = typeof p.time === "object" ? JSON.stringify(p.time) : p.time;
+            const bv = bMap[key];
+            if (bv === undefined) return;
+            const isGreen = p.value >= bv;
+            topData.push({ time: p.time, value: Math.max(p.value, bv) });
+            bottomData.push({ time: p.time, value: Math.min(p.value, bv) });
+
+            if (lastIsGreen !== null && isGreen !== lastIsGreen) {
+              segments.push({ start: segStart, end: i - 1, green: lastIsGreen });
+              segStart = i;
+            }
+            lastIsGreen = isGreen;
+          });
+          if (topData.length > 0) {
+            segments.push({ start: segStart, end: topData.length - 1, green: lastIsGreen });
+          }
+
+          // 구간별 구름 AreaSeries 생성
+          segments.forEach((seg) => {
+            const segTop = topData.slice(seg.start, seg.end + 2); // +1 for overlap
+            const segBottom = bottomData.slice(seg.start, seg.end + 2);
+            if (segTop.length < 2) return;
+
+            const color = seg.green ? "rgba(76,175,80,0.25)" : "rgba(239,83,80,0.25)";
+
+            // 상단 fill (라인 아래로 채움)
+            const sTop = chart.addAreaSeries({
+              topColor: color, bottomColor: color,
+              lineColor: seg.green ? "rgba(76,175,80,0.5)" : "rgba(239,83,80,0.5)", lineWidth: 1,
+              priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+              autoscaleInfoProvider: () => null,
+            });
+            sTop.setData(segTop);
+            ichimokuSeriesRef.current.push(sTop);
+
+            // 하단 마스킹 (배경색으로 덮어서 하단 채움 제거)
+            const sBottom = chart.addAreaSeries({
+              topColor: BG, bottomColor: BG,
+              lineColor: BG, lineWidth: 0,
+              priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+              autoscaleInfoProvider: () => null,
+            });
+            sBottom.setData(segBottom);
+            ichimokuSeriesRef.current.push(sBottom);
+          });
+
+          // 선행스팬 A/B 라인 (구름 위에 그리기)
+          const sA = chart.addLineSeries({ color: "rgba(76,175,80,0.6)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          sA.setData(aData);
+          ichimokuSeriesRef.current.push(sA);
+
+          const sB = chart.addLineSeries({ color: "rgba(239,83,80,0.6)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          sB.setData(bData);
+          ichimokuSeriesRef.current.push(sB);
+        }
+
+        // 차트 뷰 복원 (미래 선행스팬으로 인한 축소/이동 방지)
+        if (savedRange) {
+          chart.timeScale().setVisibleLogicalRange(savedRange);
+        }
+      })
+      .catch(() => {});
+  }, [showIchimoku, code, timeframe, isDomestic, candles]);
+
   // ── 선 렌더링 ──────────────────────────────
 
   const priceLinesRef = useRef([]);
@@ -305,7 +441,7 @@ export default function ChartDetail() {
         const pl = cs.createPriceLine({ price: line.price, color, lineWidth: 1.5, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: line.name || "" });
         priceLinesRef.current.push(pl);
       } else if (line.line_type === "trend" && line.x1 && line.x2) {
-        const s = chart.addLineSeries({ color, lineWidth: 1.5, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false });
+        const s = chart.addLineSeries({ color, lineWidth: 1.5, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, autoscaleInfoProvider: () => null });
 
         // 캔들 전체 범위로 추세선 연장 (slope/intercept 사용)
         const toTime = (v) => {
@@ -318,14 +454,40 @@ export default function ChartDetail() {
 
         let data;
         if (line.slope != null && line.intercept != null && candles.length >= 2) {
-          // "YYYY-MM-DD" → UTC 초 변환
           const toTs = (t) => typeof t === "number" ? t : new Date(t + "T00:00:00Z").getTime() / 1000;
-          const tFirst = toTs(candles[0].time);
-          const tLast = toTs(candles[candles.length - 1].time);
-          data = [
-            { time: candles[0].time, value: line.slope * tFirst + line.intercept },
-            { time: candles[candles.length - 1].time, value: line.slope * tLast + line.intercept },
-          ];
+          const t1 = toTs(line.x1);
+          const t2 = toTs(line.x2);
+          // 캔들 인덱스 기반으로 원래 두 점 + 연장점 계산
+          const idx1 = candles.findIndex((c) => toTs(c.time) >= t1);
+          const idx2 = candles.findIndex((c) => toTs(c.time) >= t2);
+          const i1 = idx1 >= 0 ? idx1 : 0;
+          const i2 = idx2 >= 0 ? idx2 : candles.length - 1;
+          const idxSpan = i2 - i1 || 1;
+          const visualSlope = (line.y2 - line.y1) / idxSpan;
+          const lastTs = toTs(candles[candles.length - 1].time);
+          const prevTs = toTs(candles[candles.length - 2].time);
+          const interval = lastTs - prevTs;
+          const extCount = Math.round(candles.length * 0.3);
+          data = [];
+          // 왼쪽 연장: P1 이전 캔들 전체
+          for (let i = 0; i < i1; i++) {
+            data.push({ time: candles[i].time, value: line.y1 + visualSlope * (i - i1) });
+          }
+          // 원래 두 점 사이 + P2까지
+          for (let i = i1; i <= i2; i++) {
+            data.push({ time: candles[i].time, value: line.y1 + visualSlope * (i - i1) });
+          }
+          // P2 이후 ~ 마지막 캔들
+          for (let i = i2 + 1; i < candles.length; i++) {
+            data.push({ time: candles[i].time, value: line.y1 + visualSlope * (i - i1) });
+          }
+          // 오른쪽으로 캔들 30%분 연장
+          for (let i = 1; i <= extCount; i++) {
+            const futureTs = lastTs + interval * i;
+            const d = new Date(futureTs * 1000);
+            const ft = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+            data.push({ time: ft, value: line.y1 + visualSlope * (candles.length - 1 - i1 + i) });
+          }
         } else {
           data = [
             { time: toTime(line.x1), value: line.y1 },
@@ -336,6 +498,8 @@ export default function ChartDetail() {
         trendSeriesMap.current[line.id] = s;
       }
     });
+    // 추세선 연장으로 인한 이동 방지: 마지막 캔들 기준으로 스크롤
+    chart.timeScale().scrollToPosition(2, false);
   }, [lines, candles, chartReady]);
 
   // ── 호가 기반 지지/저항선 차트 표시 ─────────
@@ -742,7 +906,7 @@ export default function ChartDetail() {
         {MA_CONFIG.map(({ key, label, color }) => (
           <button
             key={key}
-            onClick={() => setShowMA((prev) => ({ ...prev, [key]: !prev[key] }))}
+            onClick={() => { setShowMA((prev) => ({ ...prev, [key]: !prev[key] })); setShowIchimoku(false); }}
             style={{
               flexShrink: 0, padding: "6px 12px", fontSize: 12, borderRadius: 20, border: B,
               fontWeight: showMA[key] ? 600 : 400,
@@ -757,6 +921,24 @@ export default function ChartDetail() {
         {isDomestic && (
           <>
             <div style={{ width: 1, background: B, flexShrink: 0, margin: "2px 4px" }} />
+            <button
+              onClick={() => {
+                setShowIchimoku((prev) => {
+                  const next = !prev;
+                  if (next) setShowMA({ ma5: false, ma20: false, ma60: false });
+                  return next;
+                });
+              }}
+              style={{
+                flexShrink: 0, padding: "6px 12px", fontSize: 12, borderRadius: 20, border: B,
+                fontWeight: showIchimoku ? 600 : 400,
+                background: showIchimoku ? "rgba(171,71,188,0.15)" : "transparent",
+                color: showIchimoku ? "#ab47bc" : "var(--color-text-tertiary)",
+                cursor: "pointer",
+              }}
+            >
+              일목균형표
+            </button>
             <button
               onClick={() => setShowOrderbookLines((prev) => !prev)}
               style={{
@@ -802,6 +984,22 @@ export default function ChartDetail() {
                   </div>
                 )}
                 <div ref={chartRef} style={{ width: "100%", cursor: drawMode ? "crosshair" : "default" }} />
+                {showIchimoku && (
+                  <div style={{ position: "absolute", top: 8, left: 8, zIndex: 5, display: "flex", gap: 10, flexWrap: "wrap", padding: "4px 8px", borderRadius: 6, background: "rgba(30,30,56,0.85)" }}>
+                    {[
+                      { color: "#00bcd4", label: "전환선", style: "dashed" },
+                      { color: "#ff9800", label: "기준선" },
+                      { color: "#ce93d8", label: "후행스팬", style: "dotted" },
+                      { color: "rgba(76,175,80,0.6)", label: "선행A" },
+                      { color: "rgba(239,83,80,0.6)", label: "선행B" },
+                    ].map(({ color, label, style }) => (
+                      <span key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "#a0a0c0" }}>
+                        <span style={{ display: "inline-block", width: 14, height: 0, borderTop: `2px ${style || "solid"} ${color}` }} />
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -867,6 +1065,22 @@ export default function ChartDetail() {
               </div>
             )}
             <div ref={chartRef} style={{ width: "100%" }} />
+            {showIchimoku && (
+              <div style={{ position: "absolute", top: 8, left: 8, zIndex: 5, display: "flex", gap: 8, flexWrap: "wrap", padding: "3px 6px", borderRadius: 6, background: "rgba(30,30,56,0.85)" }}>
+                {[
+                  { color: "#00bcd4", label: "전환", style: "dashed" },
+                  { color: "#ff9800", label: "기준" },
+                  { color: "#ce93d8", label: "후행", style: "dotted" },
+                  { color: "rgba(76,175,80,0.6)", label: "선행A" },
+                  { color: "rgba(239,83,80,0.6)", label: "선행B" },
+                ].map(({ color, label, style }) => (
+                  <span key={label} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 9, color: "#a0a0c0" }}>
+                    <span style={{ display: "inline-block", width: 10, height: 0, borderTop: `2px ${style || "solid"} ${color}` }} />
+                    {label}
+                  </span>
+                ))}
+              </div>
+            )}
             {/* 플로팅 버튼 */}
             <button
               onClick={() => { setDrawMode(!drawMode); setDrawPoints([]); }}
