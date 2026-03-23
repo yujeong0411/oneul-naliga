@@ -11,6 +11,8 @@ export default function AddLineModal({
   preselectedType = null,   // "trend" | "horizontal" | null
   defaultTimeframe = "일봉",
   currentPrice = null,
+  pendingPoints = null,
+  onUpdatePoints = null,
 }) {
   const isTrend = preselectedType === "trend";
   const [lineName, setLineName] = useState("");
@@ -91,11 +93,37 @@ export default function AddLineModal({
 
         <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* 추세선 안내 */}
-          {isTrend && (
-            <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 14px" }}>
-              <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-success)", fontWeight: 500 }}>
-                두 점이 선택됐습니다. 선 정보를 입력하세요.
+          {/* 추세선 두 점 가격 수정 */}
+          {isTrend && pendingPoints?.length === 2 && (
+            <div style={{ background: "var(--color-background-secondary)", borderRadius: 10, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {pendingPoints.map((p, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, color: "#00e676",
+                    background: "rgba(0,230,118,0.12)", borderRadius: 4, padding: "2px 6px",
+                    flexShrink: 0,
+                  }}>
+                    P{i + 1}
+                  </span>
+                  <input
+                    type="number"
+                    value={p.price}
+                    onChange={(e) => {
+                      if (!onUpdatePoints) return;
+                      const updated = [...pendingPoints];
+                      updated[i] = { ...updated[i], price: Number(e.target.value) };
+                      onUpdatePoints(updated);
+                    }}
+                    style={{
+                      flex: 1, fontSize: 14, fontWeight: 600, padding: "8px 10px",
+                      border: B, borderRadius: 8, outline: "none", boxSizing: "border-box",
+                      color: "var(--color-text-primary)", background: "var(--color-background-primary)",
+                    }}
+                  />
+                </div>
+              ))}
+              <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                클릭 위치가 부정확하면 가격을 직접 수정하세요.
               </p>
             </div>
           )}

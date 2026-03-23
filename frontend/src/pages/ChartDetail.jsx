@@ -34,6 +34,10 @@ function useIsMobile() {
   return isMobile;
 }
 
+const OVERLAY_DEFAULTS = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null };
+function addOverlayLine(chart, opts) { return chart.addLineSeries({ ...OVERLAY_DEFAULTS, ...opts }); }
+function addOverlayArea(chart, opts) { return chart.addAreaSeries({ ...OVERLAY_DEFAULTS, ...opts }); }
+
 function calcMA(candles, period) {
   return candles
     .map((c, i) => {
@@ -278,7 +282,7 @@ export default function ChartDetail() {
     maSeriesRefs.current = [];
     MA_CONFIG.forEach(({ key, period, color }) => {
       if (!showMA[key]) return;
-      const s = chart.addLineSeries({ color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      const s = addOverlayLine(chart, { color, lineWidth: 1 });
       s.setData(calcMA(candles, period));
       maSeriesRefs.current.push(s);
     });
@@ -319,19 +323,19 @@ export default function ChartDetail() {
 
         // 전환선 (하늘색, 점선) — MA와 구분
         if (data.tenkan?.length) {
-          const s = chart.addLineSeries({ color: "#00bcd4", lineWidth: 1, lineStyle: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          const s = addOverlayLine(chart, { color: "#00bcd4", lineWidth: 1, lineStyle: 1 });
           s.setData(mapSeries(data.tenkan));
           ichimokuSeriesRef.current.push(s);
         }
         // 기준선 (주황색, 실선)
         if (data.kijun?.length) {
-          const s = chart.addLineSeries({ color: "#ff9800", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          const s = addOverlayLine(chart, { color: "#ff9800", lineWidth: 1.5 });
           s.setData(mapSeries(data.kijun));
           ichimokuSeriesRef.current.push(s);
         }
         // 후행스팬 (연보라, 점선)
         if (data.chikou?.length) {
-          const s = chart.addLineSeries({ color: "#ce93d8", lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          const s = addOverlayLine(chart, { color: "#ce93d8", lineWidth: 1, lineStyle: 2 });
           s.setData(mapSeries(data.chikou));
           ichimokuSeriesRef.current.push(s);
         }
@@ -380,32 +384,28 @@ export default function ChartDetail() {
             const color = seg.green ? "rgba(76,175,80,0.25)" : "rgba(239,83,80,0.25)";
 
             // 상단 fill (라인 아래로 채움)
-            const sTop = chart.addAreaSeries({
+            const sTop = addOverlayArea(chart, {
               topColor: color, bottomColor: color,
               lineColor: seg.green ? "rgba(76,175,80,0.5)" : "rgba(239,83,80,0.5)", lineWidth: 1,
-              priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
-              autoscaleInfoProvider: () => null,
             });
             sTop.setData(segTop);
             ichimokuSeriesRef.current.push(sTop);
 
             // 하단 마스킹 (배경색으로 덮어서 하단 채움 제거)
-            const sBottom = chart.addAreaSeries({
+            const sBottom = addOverlayArea(chart, {
               topColor: BG, bottomColor: BG,
               lineColor: BG, lineWidth: 0,
-              priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
-              autoscaleInfoProvider: () => null,
             });
             sBottom.setData(segBottom);
             ichimokuSeriesRef.current.push(sBottom);
           });
 
           // 선행스팬 A/B 라인 (구름 위에 그리기)
-          const sA = chart.addLineSeries({ color: "rgba(76,175,80,0.6)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          const sA = addOverlayLine(chart, { color: "rgba(76,175,80,0.6)", lineWidth: 1 });
           sA.setData(aData);
           ichimokuSeriesRef.current.push(sA);
 
-          const sB = chart.addLineSeries({ color: "rgba(239,83,80,0.6)", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
+          const sB = addOverlayLine(chart, { color: "rgba(239,83,80,0.6)", lineWidth: 1 });
           sB.setData(bData);
           ichimokuSeriesRef.current.push(sB);
         }
@@ -427,6 +427,8 @@ export default function ChartDetail() {
     const chart = chartInstance.current;
     const cs = candleSeries.current;
 
+    const savedRange = chart.timeScale().getVisibleLogicalRange();
+
     // 기존 수평선 제거
     priceLinesRef.current.forEach((pl) => { try { cs.removePriceLine(pl); } catch { } });
     priceLinesRef.current = [];
@@ -441,7 +443,7 @@ export default function ChartDetail() {
         const pl = cs.createPriceLine({ price: line.price, color, lineWidth: 1.5, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: line.name || "" });
         priceLinesRef.current.push(pl);
       } else if (line.line_type === "trend" && line.x1 && line.x2) {
-        const s = chart.addLineSeries({ color, lineWidth: 1.5, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, autoscaleInfoProvider: () => null });
+        const s = addOverlayLine(chart, { color, lineWidth: 1.5, lineStyle: LineStyle.Dashed });
 
         // 캔들 전체 범위로 추세선 연장 (slope/intercept 사용)
         const toTime = (v) => {
@@ -498,8 +500,10 @@ export default function ChartDetail() {
         trendSeriesMap.current[line.id] = s;
       }
     });
-    // 추세선 연장으로 인한 이동 방지: 마지막 캔들 기준으로 스크롤
-    chart.timeScale().scrollToPosition(2, false);
+    // 추세선 연장으로 인한 이동 방지: 원래 범위 복원
+    if (savedRange) {
+      chart.timeScale().setVisibleLogicalRange(savedRange);
+    }
   }, [lines, candles, chartReady]);
 
   // ── 호가 기반 지지/저항선 차트 표시 ─────────
@@ -546,9 +550,13 @@ export default function ChartDetail() {
         const next = [...prev, point];
         if (next.length === 2) {
           setPendingPoints(next.map((p) => ({ date: p.time, price: p.value })));
-          setShowModal(true);
-          setDrawMode(false);
-          return [];
+          // 두 번째 마커를 잠깐 보여준 후 모달 열기
+          setTimeout(() => {
+            setShowModal(true);
+            setDrawMode(false);
+            setDrawPoints([]);
+          }, 500);
+          return next;
         }
         return next;
       });
@@ -557,6 +565,65 @@ export default function ChartDetail() {
     chart.subscribeClick(handler);
     return () => chart.unsubscribeClick(handler);
   }, [drawMode]);
+
+  // ── 선 긋기 클릭 포인트 마커 (HTML 오버레이) ──
+
+  const drawDotRefs = useRef([]);
+
+  useEffect(() => {
+    // 기존 점 제거
+    drawDotRefs.current.forEach((el) => el.remove());
+    drawDotRefs.current = [];
+
+    if (!chartInstance.current || !candleSeries.current || !chartRef.current) return;
+    const chart = chartInstance.current;
+    const cs = candleSeries.current;
+    const container = chartRef.current;
+
+    const updateDots = () => {
+      drawDotRefs.current.forEach((el) => el.remove());
+      drawDotRefs.current = [];
+
+      drawPoints.forEach((p, i) => {
+        const x = chart.timeScale().timeToCoordinate(p.time);
+        const y = cs.priceToCoordinate(p.value);
+        if (x === null || y === null) return;
+
+        const dot = document.createElement("div");
+        dot.style.cssText = `
+          position:absolute; left:${x - 5}px; top:${y - 5}px;
+          width:10px; height:10px; border-radius:50%;
+          background:#00e676; border:2px solid #fff;
+          pointer-events:none; z-index:10;
+          box-shadow: 0 0 6px rgba(0,230,118,0.8);
+        `;
+        const label = document.createElement("div");
+        label.style.cssText = `
+          position:absolute; left:${x + 10}px; top:${y - 10}px;
+          font-size:11px; font-weight:700; color:#00e676;
+          pointer-events:none; z-index:10; white-space:nowrap;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+        `;
+        label.textContent = `P${i + 1} ${p.value.toLocaleString()}`;
+
+        container.appendChild(dot);
+        container.appendChild(label);
+        drawDotRefs.current.push(dot, label);
+      });
+    };
+
+    updateDots();
+
+    // 차트 스크롤/줌 시 위치 업데이트
+    const sub = () => updateDots();
+    chart.timeScale().subscribeVisibleLogicalRangeChange(sub);
+
+    return () => {
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(sub);
+      drawDotRefs.current.forEach((el) => el.remove());
+      drawDotRefs.current = [];
+    };
+  }, [drawPoints]);
 
   // ── 저장 / 삭제 ────────────────────────────
 
@@ -1181,6 +1248,8 @@ export default function ChartDetail() {
           preselectedType={pendingPoints ? "trend" : null}
           defaultTimeframe={timeframe}
           currentPrice={displayPrice || null}
+          pendingPoints={pendingPoints}
+          onUpdatePoints={setPendingPoints}
         />
       )}
     </div>
