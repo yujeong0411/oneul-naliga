@@ -438,12 +438,14 @@ export default function ChartDetail() {
     Object.values(trendSeriesMap.current).forEach((s) => { try { chart.removeSeries(s); } catch { } });
     trendSeriesMap.current = {};
 
-    lines.filter((line) => !hiddenLines.has(line.id)).forEach((line) => {
+    let hasTrend = false;
+    lines.filter((line) => !hiddenLines.has(line.id) && (line.line_type === "horizontal" || line.timeframe === timeframe)).forEach((line) => {
       const color = line.color || lineColor(line.signal_type);
       if (line.line_type === "horizontal" && line.price) {
         const pl = cs.createPriceLine({ price: line.price, color, lineWidth: 1.5, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: line.name || "" });
         priceLinesRef.current.push(pl);
       } else if (line.line_type === "trend" && line.x1 && line.x2) {
+        hasTrend = true;
         const s = addOverlayLine(chart, { color, lineWidth: 1.5, lineStyle: LineStyle.Dashed });
 
         // 캔들 전체 범위로 추세선 연장 (slope/intercept 사용)
@@ -485,10 +487,12 @@ export default function ChartDetail() {
             data.push({ time: candles[i].time, value: line.y1 + visualSlope * (i - i1) });
           }
           // 오른쪽으로 캔들 30%분 연장
+          const isNumericTime = typeof candles[0].time === "number";
           for (let i = 1; i <= extCount; i++) {
             const futureTs = lastTs + interval * i;
-            const d = new Date(futureTs * 1000);
-            const ft = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+            const ft = isNumericTime
+              ? futureTs
+              : (() => { const d = new Date(futureTs * 1000); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`; })();
             data.push({ time: ft, value: line.y1 + visualSlope * (candles.length - 1 - i1 + i) });
           }
         } else {
@@ -501,11 +505,11 @@ export default function ChartDetail() {
         trendSeriesMap.current[line.id] = s;
       }
     });
-    // 추세선 연장으로 인한 이동 방지: 원래 범위 복원
-    if (savedRange) {
+    // 추세선 연장으로 인한 이동 방지: 추세선이 있을 때만 범위 복원
+    if (hasTrend && savedRange) {
       chart.timeScale().setVisibleLogicalRange(savedRange);
     }
-  }, [lines, candles, chartReady, hiddenLines]);
+  }, [lines, candles, chartReady, hiddenLines, timeframe]);
 
   // ── 호가 기반 지지/저항선 차트 표시 ─────────
 
@@ -643,15 +647,19 @@ export default function ChartDetail() {
 
     if (formData.line_type === "trend" && pendingPoints?.length === 2) {
       const [p1, p2] = pendingPoints;
-      // "20250101" → "2025-01-01" 변환 (JS Date는 ISO 8601 형식 필요)
-      const parseDate = (s) => typeof s === "string" && /^\d{8}$/.test(s)
-        ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
-        : s;
-      const t1 = new Date(parseDate(p1.date)).getTime() / 1000;
-      const t2 = new Date(parseDate(p2.date)).getTime() / 1000;
+      // date가 숫자면 이미 Unix timestamp(초), 문자열이면 날짜 파싱
+      const toUnix = (d) => {
+        if (typeof d === "number") return d;
+        const s = typeof d === "string" && /^\d{8}$/.test(d)
+          ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`
+          : d;
+        return new Date(s).getTime() / 1000;
+      };
+      const t1 = toUnix(p1.date);
+      const t2 = toUnix(p2.date);
       const slope = (p2.price - p1.price) / (t2 - t1);
       const intercept = p1.price - slope * t1;
-      Object.assign(body, { x1: t1, y1: p1.price, x2: t2, y2: p2.price, slope, intercept });
+      Object.assign(body, { x1: Math.round(t1), y1: p1.price, x2: Math.round(t2), y2: p2.price, slope, intercept });
     }
 
     try {
@@ -713,7 +721,7 @@ export default function ChartDetail() {
   const prevClose = candles.at(-2)?.close;
   const displayPrice = livePrice ?? currentPrice ?? lastClose ?? 0;
   const priceChange = prevClose ? displayPrice - prevClose : 0;
-  const pctChange = liveChangePct ?? (prevClose ? ((priceChange / prevClose) * 100).toFixed(2) : "0.00");
+  const pctChange = liveChangePct != null ? String(liveChangePct).replace(/^\+/, "") : (prevClose ? ((priceChange / prevClose) * 100).toFixed(2) : "0.00");
 
   // ── 렌더: 선 목록 ──────────────────────────
 
@@ -755,11 +763,14 @@ export default function ChartDetail() {
         <p style={{ padding: "24px 20px", textAlign: "center", fontSize: 13, color: "var(--color-text-tertiary)" }}>설정된 선이 없습니다</p>
       ) : (
         lines.map((line, i) => {
-          const color = line.color || lineColor(line.signal_type);
           const target = line.line_type === "horizontal" ? line.price : line.y2;
+          const isSupport = target && displayPrice ? target <= displayPrice : line.signal_type === "loss";
+          const dynamicSignal = isSupport ? "loss" : "attack";
+          const color = line.color || lineColor(dynamicSignal);
           const dist = target && displayPrice ? ((displayPrice - target) / target * 100).toFixed(2) : null;
+          const isOtherTf = line.line_type === "trend" && line.timeframe !== timeframe;
           return (
-            <div key={line.id} onClick={() => scrollToLine(line)} style={{ padding: "14px 20px", borderBottom: i < lines.length - 1 ? B : "none", cursor: "pointer", opacity: hiddenLines.has(line.id) ? 0.4 : 1, transition: "opacity 0.2s" }}>
+            <div key={line.id} onClick={isOtherTf ? undefined : () => scrollToLine(line)} style={{ padding: "14px 20px", borderBottom: i < lines.length - 1 ? B : "none", cursor: isOtherTf ? "default" : "pointer", opacity: hiddenLines.has(line.id) || isOtherTf ? 0.4 : 1, pointerEvents: isOtherTf ? "none" : "auto", transition: "opacity 0.2s" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 14, height: 2.5, background: color, borderRadius: 1 }} />
@@ -810,8 +821,8 @@ export default function ChartDetail() {
                 <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "var(--color-background-secondary)", color: "var(--color-text-secondary)" }}>
                   {line.timeframe}
                 </span>
-                <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: line.signal_type === "loss" ? "var(--color-background-danger)" : "var(--color-background-success)", color }}>
-                  {line.signal_type === "loss" ? "지지선" : "저항선"}
+                <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: dynamicSignal === "loss" ? "var(--color-background-danger)" : "var(--color-background-success)", color }}>
+                  {dynamicSignal === "loss" ? "지지선" : "저항선"}
                 </span>
                 {target && (
                   <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>

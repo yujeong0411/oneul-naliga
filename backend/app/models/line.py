@@ -8,13 +8,6 @@ class LineCreate(BaseModel):
     """선 생성 요청 모델"""
     stock_code: str
     timeframe: str
-
-    @field_validator("timeframe")
-    @classmethod
-    def check_timeframe(cls, v):
-        if v not in VALID_TIMEFRAMES:
-            raise ValueError(f"지원하지 않는 timeframe: {v}")
-        return v
     line_type: Literal["trend", "horizontal"]
     signal_type: Literal["attack", "loss"]
     name: Optional[str] = None
@@ -34,6 +27,13 @@ class LineCreate(BaseModel):
     sensitivity: float = 0.5  # 알림 민감도 (±%)
     user_id: Optional[str] = None
 
+    @field_validator("timeframe")
+    @classmethod
+    def check_timeframe(cls, v):
+        if v not in VALID_TIMEFRAMES:
+            raise ValueError(f"지원하지 않는 timeframe: {v}")
+        return v
+
 
 class LineUpdate(BaseModel):
     """선 수정 요청 모델 (부분 업데이트)"""
@@ -43,3 +43,7 @@ class LineUpdate(BaseModel):
     is_active: Optional[bool] = None
     price: Optional[float] = None
     signal_type: Optional[Literal["attack", "loss"]] = None
+    y1: Optional[float] = None
+    y2: Optional[float] = None
+    slope: Optional[float] = None
+    intercept: Optional[float] = None

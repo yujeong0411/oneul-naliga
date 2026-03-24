@@ -11,6 +11,8 @@ export default function EditLineSheet({ line, onClose, onSave, currentPrice }) {
   const initialIdx = SENSITIVITY_VALUES.findIndex((v) => v === line.sensitivity) ?? 1;
   const [sensitivityIdx, setSensitivityIdx] = useState(initialIdx >= 0 ? initialIdx : 1);
   const [price, setPrice] = useState(line.line_type === "horizontal" ? line.price : null);
+  const [y1, setY1] = useState(line.y1 ?? "");
+  const [y2, setY2] = useState(line.y2 ?? "");
 
   const sheetRef = useRef(null);
   const startY = useRef(0);
@@ -43,6 +45,23 @@ export default function EditLineSheet({ line, onClose, onSave, currentPrice }) {
       updates.price = Number(price);
       if (currentPrice) {
         updates.signal_type = Number(price) <= currentPrice ? "loss" : "attack";
+      }
+    }
+    if (line.line_type === "trend") {
+      const newY1 = Number(y1);
+      const newY2 = Number(y2);
+      if (y1 !== "" && !isNaN(newY1)) updates.y1 = newY1;
+      if (y2 !== "" && !isNaN(newY2)) updates.y2 = newY2;
+      if (updates.y1 != null || updates.y2 != null) {
+        const finalY1 = updates.y1 ?? line.y1;
+        const finalY2 = updates.y2 ?? line.y2;
+        if (line.x1 && line.x2) {
+          const dt = line.x2 - line.x1;
+          if (dt !== 0) {
+            updates.slope = (finalY2 - finalY1) / dt;
+            updates.intercept = finalY1 - updates.slope * line.x1;
+          }
+        }
       }
     }
     onSave(line.id, updates);
@@ -89,7 +108,7 @@ export default function EditLineSheet({ line, onClose, onSave, currentPrice }) {
 
         <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* 가격 (수평선만) */}
+          {/* 가격 (수평선) */}
           {line.line_type === "horizontal" && (
             <div>
               <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>가격</label>
@@ -105,6 +124,38 @@ export default function EditLineSheet({ line, onClose, onSave, currentPrice }) {
                   color: "var(--color-text-primary)", background: "var(--color-background-secondary)",
                 }}
               />
+            </div>
+          )}
+
+          {/* 가격 (추세선 P1, P2) */}
+          {line.line_type === "trend" && (
+            <div>
+              <label style={{ fontSize: 12, color: "var(--color-text-secondary)", display: "block", marginBottom: 8 }}>가격</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {[
+                  { label: "P1", value: y1, setter: setY1 },
+                  { label: "P2", value: y2, setter: setY2 },
+                ].map(({ label, value, setter }) => (
+                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, color: "#00e676",
+                      background: "rgba(0,230,118,0.12)", borderRadius: 4, padding: "2px 6px",
+                      flexShrink: 0,
+                    }}>{label}</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={value}
+                      onChange={(e) => setter(e.target.value)}
+                      style={{
+                        flex: 1, fontSize: 14, fontWeight: 600, padding: "8px 10px",
+                        border: B, borderRadius: 8, outline: "none", boxSizing: "border-box",
+                        color: "var(--color-text-primary)", background: "var(--color-background-secondary)",
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
