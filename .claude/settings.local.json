@@ -58,7 +58,8 @@
       "Bash(.venv/Scripts/python.exe -c \"\nimport asyncio\nfrom app.services.kiwoom import _call_etf\n\nasync def test\\(\\):\n    data = await _call_etf\\('ka40002', {'stk_cd': '005930'}\\)\n    print\\(data\\)\n\nasyncio.run\\(test\\(\\)\\)\n\")",
       "Bash(find /c/Users/choiy/Desktop/oneul-naliga/frontend -name *.jsx -o -name *.tsx)",
       "Bash(find /c/Users/choiy/Desktop/oneul-naliga/backend -maxdepth 2 -name *.py -type f)",
-      "WebFetch(domain:status.supabase.com)"
+      "WebFetch(domain:status.supabase.com)",
+      "Bash(grep -r \"TODO\\\\|FIXME\\\\|HACK\\\\|BUG\\\\|XXX\" /c/Users/choiy/Desktop/oneul-naliga --include=*.py --include=*.jsx --include=*.js)"
     ]
   }
 }

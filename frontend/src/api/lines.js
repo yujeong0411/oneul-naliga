@@ -22,3 +22,6 @@ export const updateLine = (id, body) =>
 
 export const deleteLine = (id) =>
   fetch(`${BASE}/lines/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+export const getLineStats = (id) =>
+  fetch(`${BASE}/lines/${id}/stats`).then((r) => r.json());

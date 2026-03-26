@@ -112,8 +112,8 @@ async def _refresh_all_rankings():
                 data = await kiwoom.get_ranking(rt)
                 _ranking_cache[rt] = data
             except Exception as e:
-                print(f"[ranking] {rt} 백그라운드 갱신 실패: {e}")
-            await asyncio.sleep(0.5)  # 호출 간 간격 (초당 2건)
+                print(f"[ranking] {rt} 백그라운드 갱신 실패: {type(e).__name__}: {e}")
+            await asyncio.sleep(0.5)
         await asyncio.sleep(30)
 
 
@@ -122,7 +122,6 @@ async def get_ranking(type: str = Query(default="view")):
     """인기종목 랭킹 조회 — 캐시 즉시 반환"""
     if type in _ranking_cache:
         return _ranking_cache[type]
-    # 캐시 없으면 직접 호출 (서버 시작 직후)
     try:
         data = await kiwoom.get_ranking(type)
         _ranking_cache[type] = data
@@ -185,11 +184,10 @@ async def get_fx():
 
     # Fallback: open.er-api.com
     try:
-        from app.services.http_client import get_client
-        client = get_client()
-        r = await client.get("https://open.er-api.com/v6/latest/USD")
-        r.raise_for_status()
-        data = r.json()
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get("https://open.er-api.com/v6/latest/USD")
+            r.raise_for_status()
+            data = r.json()
 
         rates = data.get("rates", {})
         krw = rates.get("KRW", 1)

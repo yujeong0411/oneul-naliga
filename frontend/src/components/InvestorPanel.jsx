@@ -107,58 +107,54 @@ export default function InvestorPanel({ market, code }) {
   return (
     <div style={{ fontSize: 12 }}>
 
-      {/* 오늘 요약 */}
+      {/* 오늘 + 5일 합산 테이블 */}
       <div style={{ padding: "14px 16px", borderBottom: B }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 12 }}>
-          오늘 순매수
-          <span style={{ fontSize: 11, fontWeight: 400, color: "var(--color-text-tertiary)", marginLeft: 6 }}>
-            {fmtDate(today.date)}
-          </span>
+        {/* 헤더 */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr",
+          padding: "0 0 8px", borderBottom: B, fontSize: 10, fontWeight: 600, color: "var(--color-text-tertiary)",
+        }}>
+          <span></span>
+          {investors.map((inv) => (
+            <span key={inv.key} style={{ textAlign: "right", display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: inv.color, display: "inline-block" }} />
+              {inv.label}
+            </span>
+          ))}
         </div>
-        {investors.map((inv) => {
-          const val = today[inv.key] || 0;
-          return (
-            <div key={inv.key} style={{ marginBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: inv.color }} />
-                  <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{inv.label}</span>
-                </div>
-                <span style={{
-                  fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                  color: val > 0 ? "var(--color-rise)" : val < 0 ? "var(--color-fall)" : "var(--color-text-tertiary)",
-                }}>
-                  {val > 0 ? "+" : ""}{fmtQty(val)}주
-                </span>
-              </div>
-              <Bar value={val} max={maxVal} color={inv.color} />
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 5일 합산 */}
-      <div style={{ padding: "14px 16px", borderBottom: B }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 12 }}>
-          최근 5일 합산
-        </div>
-        {sum5.map((inv) => (
-          <div key={inv.key} style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: inv.color }} />
-                <span style={{ fontWeight: 600, color: "var(--color-text-primary)" }}>{inv.label}</span>
-              </div>
-              <span style={{
-                fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                color: inv.total > 0 ? "var(--color-rise)" : inv.total < 0 ? "var(--color-fall)" : "var(--color-text-tertiary)",
+        {/* 오늘 */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr",
+          padding: "9px 0", borderBottom: `1px solid var(--color-background-secondary)`,
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-primary)" }}>오늘 <span style={{ fontWeight: 400, color: "var(--color-text-tertiary)" }}>{fmtDate(today.date)}</span></span>
+          {investors.map((inv) => {
+            const val = today[inv.key] || 0;
+            return (
+              <span key={inv.key} style={{
+                textAlign: "right", fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+                color: val > 0 ? "var(--color-rise)" : val < 0 ? "var(--color-fall)" : "var(--color-text-tertiary)",
               }}>
-                {inv.total > 0 ? "+" : ""}{fmtQty(inv.total)}주
+                {val > 0 ? "+" : ""}{fmtQty(val)}
               </span>
-            </div>
-            <Bar value={inv.total} max={maxSum5} color={inv.color} />
-          </div>
-        ))}
+            );
+          })}
+        </div>
+        {/* 5일 합산 */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr",
+          padding: "9px 0",
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-primary)" }}>5일 합산</span>
+          {sum5.map((inv) => (
+            <span key={inv.key} style={{
+              textAlign: "right", fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+              color: inv.total > 0 ? "var(--color-rise)" : inv.total < 0 ? "var(--color-fall)" : "var(--color-text-tertiary)",
+            }}>
+              {inv.total > 0 ? "+" : ""}{fmtQty(inv.total)}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* 일별 테이블 */}

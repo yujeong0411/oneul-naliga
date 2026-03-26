@@ -26,6 +26,7 @@ class LineCreate(BaseModel):
     color: Optional[str] = None  # 사용자 지정 색상 (hex)
     sensitivity: float = 0.5  # 알림 민감도 (±%)
     user_id: Optional[str] = None
+    intent: Optional[str] = None  # 'buy' | 'sell' | 'stop' | 'watch'
 
     @field_validator("timeframe")
     @classmethod
@@ -47,3 +48,4 @@ class LineUpdate(BaseModel):
     y2: Optional[float] = None
     slope: Optional[float] = None
     intercept: Optional[float] = None
+    intent: Optional[str] = None

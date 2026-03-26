@@ -487,7 +487,7 @@ export default function Home() {
                         setKeywordInput("");
                       }
                     }}
-                    placeholder="키워드 입력 후 Enter"
+                    placeholder="관심 키워드 추가 (예: 삼성전자)"
                     style={{
                       flex: 1, padding: "7px 12px", fontSize: 13, borderRadius: 8,
                       border: "1px solid var(--color-border-tertiary)",
