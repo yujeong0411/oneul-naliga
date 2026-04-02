@@ -3,6 +3,8 @@ import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { createChart, CrosshairMode, LineStyle } from "lightweight-charts";
 import AddLineModal from "../components/AddLineModal";
 import EditLineSheet from "../components/EditLineSheet";
+import PositionModal from "../components/PositionModal";
+import { getPositions } from "../api/positions";
 import AutoDetectPanel from "../components/AutoDetectPanel";
 import OrderbookPanel from "../components/OrderbookPanel";
 import InvestorPanel from "../components/InvestorPanel";
@@ -10,16 +12,18 @@ import IndicatorPanel from "../components/IndicatorPanel";
 import { getCandles, getPrice, detectMarket, searchStocks, getWatchlist, addStock, removeStock, getOrderbook, getEtfInfo, getEtfDaily } from "../api/stocks";
 import { useLivePrice } from "../hooks/useLivePrice";
 import { useOrderbook } from "../hooks/useOrderbook";
-import { getLines, createLine, updateLine, deleteLine } from "../api/lines";
+import { getLines, createLine, updateLine, deleteLine, getLineStats } from "../api/lines";
 import { useAuth } from "../context/AuthContext";
 
 const B = "var(--border-tertiary)";
 const TIMEFRAMES = ["일봉", "주봉", "월봉", "년봉"];
 const MINUTE_OPTIONS = [1, 3, 5, 10, 15, 30, 60];
+const PERIOD_LABEL = { "월봉": "3개월 후", "주봉": "4주 후", "일봉": "5거래일 후", "60분": "6시간 후", "30분": "4시간 후", "15분": "2시간 후", "10분": "100분 후", "5분": "1시간 후", "3분": "1시간 후", "1분": "30분 후" };
 const MA_CONFIG = [
   { key: "ma5", period: 5, color: "#f59e0b", label: "MA5" },
   { key: "ma20", period: 20, color: "#8b5cf6", label: "MA20" },
   { key: "ma60", period: 60, color: "#06b6d4", label: "MA60" },
+  { key: "ma120", period: 120, color: "#ec4899", label: "MA120" },
 ];
 
 // ── 유틸 ──────────────────────────────────────
@@ -88,7 +92,7 @@ export default function ChartDetail() {
   const [lines, setLines] = useState([]);
   const [currentPrice, setCurrentPrice] = useState(null);
   const [timeframe, setTimeframe] = useState("일봉");
-  const [showMA, setShowMA] = useState({ ma5: true, ma20: true, ma60: false });
+  const [showMA, setShowMA] = useState({ ma5: true, ma20: true, ma60: false, ma120: false });
   const [showIchimoku, setShowIchimoku] = useState(false);
   const ichimokuSeriesRef = useRef([]);
   const [drawMode, setDrawMode] = useState(false);
@@ -97,7 +101,15 @@ export default function ChartDetail() {
   const [pendingPoints, setPendingPoints] = useState(null);
   const [mobileTab, setMobileTab] = useState("lines"); // "lines" | "detect" | "orderbook"
   const [showOrderbookLines, setShowOrderbookLines] = useState(true);
+  const [showObTooltip, setShowObTooltip] = useState(false);
+  const [showMADropdown, setShowMADropdown] = useState(null);
   const [editingLine, setEditingLine] = useState(null);
+  const [lineStats, setLineStats] = useState({});
+  const [positions, setPositions] = useState([]);
+  const [editingPosition, setEditingPosition] = useState(null); // null=닫힘, {}=새로 만들기, {id:...}=편집
+  const loadPositions = () => {
+    if (user?.id) getPositions(code, user.id).then(setPositions).catch(() => {});
+  };  // { lineId: statsData }
   const [hiddenLines, setHiddenLines] = useState(new Set());
   const [showMinuteDropdown, setShowMinuteDropdown] = useState(false);
   const [chartReady, setChartReady] = useState(0);
@@ -148,13 +160,13 @@ export default function ChartDetail() {
     setChartLoading(true);
     getCandles(market, code, timeframe, count, exchange)
       .then((data) => {
-        const chartData = (data.candles ?? []).reverse().map((c) => ({
+        const chartData = (data.candles ?? []).map((c) => ({
           time: toChartTime(c.date, isIntraday, market === "US"),
           open: c.open,
           high: c.high,
           low: c.low,
           close: c.close,
-        }));
+        })).sort((a, b) => typeof a.time === "number" ? a.time - b.time : a.time.localeCompare(b.time));
         setCandles(chartData);
       })
       .catch(() => { })
@@ -178,10 +190,18 @@ export default function ChartDetail() {
       .catch(() => { });
 
     getLines(code, user?.id)
-      .then((data) => setLines(data))
+      .then((data) => {
+        setLines(data);
+        (data || []).forEach((line) => {
+          getLineStats(line.id).then((stats) => {
+            setLineStats((prev) => ({ ...prev, [line.id]: stats }));
+          }).catch(() => {});
+        });
+      })
       .catch(() => { });
 
     if (user?.id) {
+      getPositions(code, user.id).then(setPositions).catch(() => {});
       getWatchlist(user.id)
         .then((list) => setIsWatchlisted((list || []).some((s) => s.code === code)))
         .catch(() => { });
@@ -501,6 +521,9 @@ export default function ChartDetail() {
             { time: toTime(line.x2), value: line.y2 },
           ];
         }
+        data.sort((a, b) => typeof a.time === "number" ? a.time - b.time : String(a.time).localeCompare(String(b.time)));
+        // 중복 시간 제거 (lightweight-charts는 같은 시간 허용 안 함)
+        data = data.filter((d, i) => i === 0 || d.time !== data[i - 1].time);
         s.setData(data);
         trendSeriesMap.current[line.id] = s;
       }
@@ -509,7 +532,7 @@ export default function ChartDetail() {
     if (hasTrend && savedRange) {
       chart.timeScale().setVisibleLogicalRange(savedRange);
     }
-  }, [lines, candles, chartReady, hiddenLines, timeframe]);
+  }, [lines, candles, chartReady, hiddenLines, timeframe, lineStats]);
 
   // ── 호가 기반 지지/저항선 차트 표시 ─────────
 
@@ -643,6 +666,7 @@ export default function ChartDetail() {
       price: formData.price ?? null,
       color: formData.color ?? null,
       user_id: user?.id ?? null,
+      intent: formData.intent ?? null,
     };
 
     if (formData.line_type === "trend" && pendingPoints?.length === 2) {
@@ -665,16 +689,35 @@ export default function ChartDetail() {
     try {
       const saved = await createLine(body);
       setLines((prev) => [...prev, saved]);
+      setPendingPoints(null);
+      setShowModal(false);
+      return saved;
     } catch {
-      // API 미연결 시 로컬 상태에만 반영
-      setLines((prev) => [...prev, { ...body, id: Date.now() }]);
+      const fallback = { ...body, id: Date.now() };
+      setLines((prev) => [...prev, fallback]);
+      setPendingPoints(null);
+      setShowModal(false);
+      return fallback;
     }
-
-    setPendingPoints(null);
-    setShowModal(false);
   }, [code, pendingPoints]);
 
   const handleDeleteLine = async (id) => {
+    // position_lines 기반: 이 선이 연결된 포지션 찾기
+    const affected = positions.filter((p) =>
+      (p.position_lines || []).some((pl) => pl.line?.id === id)
+    );
+    if (affected.length > 0) {
+      const { deletePosition } = await import("../api/positions");
+      for (const pos of affected) {
+        const entryLines = (pos.position_lines || []).filter(pl => pl.role === "entry");
+        const isLastEntry = entryLines.length <= 1 && entryLines.some(pl => pl.line?.id === id);
+        if (isLastEntry) {
+          await deletePosition(pos.id).catch(() => {});
+        }
+        // tp/sl 선 삭제는 DB CASCADE가 position_lines를 정리
+      }
+      loadPositions();
+    }
     try { await deleteLine(id); } catch { }
     setLines((prev) => prev.filter((l) => l.id !== id));
   };
@@ -687,6 +730,7 @@ export default function ChartDetail() {
       setLines((prev) => prev.map((l) => l.id === id ? { ...l, ...updates } : l));
     }
     setEditingLine(null);
+    loadPositions();
   }, []);
 
   // 호가 기반 지지/저항선 → 내 선으로 저장
@@ -721,44 +765,59 @@ export default function ChartDetail() {
   const prevClose = candles.at(-2)?.close;
   const displayPrice = livePrice ?? currentPrice ?? lastClose ?? 0;
   const priceChange = prevClose ? displayPrice - prevClose : 0;
-  const pctChange = liveChangePct != null ? String(liveChangePct).replace(/^\+/, "") : (prevClose ? ((priceChange / prevClose) * 100).toFixed(2) : "0.00");
+  const pctChange = liveChangePct != null ? String(liveChangePct).replace(/^[+-]/, "") : (prevClose ? (Math.abs(priceChange / prevClose) * 100).toFixed(2) : "0.00");
 
   // ── 렌더: 선 목록 ──────────────────────────
 
   const scrollToLine = (line) => {
-    if (!chartInstance.current) return;
-    const ts = chartInstance.current.timeScale();
-    if (line.line_type === "horizontal" && line.price) {
-      // 수평선: 현재 보이는 범위 유지, 가격 축을 해당 가격 중심으로 이동
-      const cs = candleSeries.current;
-      if (cs) {
-        // 가격이 보이도록 차트 범위 내 마지막 캔들로 스크롤 + 가격 하이라이트
-        const range = ts.getVisibleLogicalRange();
-        if (range) ts.setVisibleLogicalRange(range);
-        // 가격 축 포커스를 위해 crosshair 시뮬레이션 대신 fitContent 후 스크롤
-        chartInstance.current.priceScale("right").applyOptions({ autoScale: false });
-        const mid = line.price;
-        const margin = mid * 0.03;
-        cs.applyOptions({ autoscaleInfoProvider: undefined });
-        setTimeout(() => {
-          chartInstance.current.priceScale("right").applyOptions({ autoScale: true });
-        }, 100);
-      }
-    } else if (line.line_type === "trend" && line.x1) {
-      // 추세선: 시작점 시간으로 스크롤
-      const toTime = (v) => {
-        if (typeof v === "number") {
-          const d = new Date(v * 1000);
-          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!chartInstance.current || candles.length === 0) return;
+    try {
+      const ts = chartInstance.current.timeScale();
+      if (line.line_type === "horizontal") {
+        // 수평선: 시간 축 이동 불필요 (가격 축에만 존재), 현재 범위 유지
+        return;
+      } else if (line.line_type === "trend" && line.x1) {
+        // 추세선: 시작점~끝점 시간으로 스크롤
+        const chartTime = candles[0].time;
+        const isNumeric = typeof chartTime === "number";
+        const toTime = (v) => {
+          if (isNumeric) {
+            return typeof v === "number" ? v : Math.floor(new Date(v + "T00:00:00+09:00").getTime() / 1000);
+          }
+          if (typeof v === "number") {
+            const d = new Date(v * 1000);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          }
+          return v;
+        };
+        let from = toTime(line.x1);
+        let to = toTime(line.x2 || line.x1);
+        // from이 to보다 크면 swap
+        if (isNumeric) {
+          if (from > to) [from, to] = [to, from];
+          const padding = Math.abs(to - from) * 0.15 || 3600;
+          ts.setVisibleRange({ from: from - padding, to: to + padding });
+        } else {
+          if (from > to) [from, to] = [to, from];
+          // from === to일 때 여유 추가
+          if (from === to) {
+            ts.fitContent();
+          } else {
+            ts.setVisibleRange({ from, to });
+          }
         }
-        return v;
-      };
-      ts.setVisibleRange({ from: toTime(line.x1), to: toTime(line.x2 || line.x1) });
+      }
+    } catch (e) {
+      // fallback: 에러 시 전체 보기
+      try { chartInstance.current.timeScale().fitContent(); } catch {}
     }
   };
 
   const renderLineList = () => (
     <div>
+      <p style={{ margin: 0, padding: "10px 20px 0", fontSize: 11, color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
+        직접 그린 지지선·저항선 목록입니다. 선을 탭하면 해당 위치로 이동하며, 가격 도달 시 알림을 받을 수 있습니다.
+      </p>
       {lines.length === 0 ? (
         <p style={{ padding: "24px 20px", textAlign: "center", fontSize: 13, color: "var(--color-text-tertiary)" }}>설정된 선이 없습니다</p>
       ) : (
@@ -819,7 +878,7 @@ export default function ChartDetail() {
               </div>
               <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
                 <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: "var(--color-background-secondary)", color: "var(--color-text-secondary)" }}>
-                  {line.timeframe}
+                  {line.line_type === "horizontal" ? "전체" : line.timeframe}
                 </span>
                 <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, background: dynamicSignal === "loss" ? "var(--color-background-danger)" : "var(--color-background-success)", color }}>
                   {dynamicSignal === "loss" ? "지지선" : "저항선"}
@@ -829,16 +888,84 @@ export default function ChartDetail() {
                     {isDomestic ? target.toLocaleString() + "원" : "$" + target.toLocaleString()}
                   </span>
                 )}
-                {dist !== null && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: Number(dist) > 0 ? "var(--color-text-success)" : "var(--color-text-danger)" }}>
-                    {Number(dist) > 0 ? "+" : ""}{dist}%
-                  </span>
-                )}
+                {dist !== null && (() => {
+                  const d = Number(dist);
+                  const isSupLine = dynamicSignal === "loss";
+                  // 지지선: 위에 있으면 초록, 아래(이탈)면 빨강
+                  // 저항선: 아래면 회색, 위(돌파)면 파랑
+                  if (isSupLine) {
+                    if (d >= 0) return <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-rise)" }}>+{d.toFixed(2)}%</span>;
+                    return <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-fall)" }}>{d.toFixed(2)}% 이탈</span>;
+                  } else {
+                    if (d <= 0) return <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-tertiary)" }}>{d.toFixed(2)}%</span>;
+                    return <span style={{ fontSize: 11, fontWeight: 600, color: "var(--color-text-info)" }}>+{d.toFixed(2)}% 돌파</span>;
+                  }
+                })()}
+                {(() => {
+                  const stats = lineStats[line.id];
+                  if (!stats || (!stats.touch_count && !stats.pending)) return null;
+                  const er = stats.expected_return;
+                  if (er == null) return (
+                    <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 20, background: "var(--color-background-secondary)", color: "var(--color-text-tertiary)" }}>
+                      {stats.touch_count}회 터치
+                    </span>
+                  );
+                  const period = PERIOD_LABEL[line.timeframe] || "이후";
+                  return (
+                    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: er >= 0 ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)", color: er >= 0 ? "#22c55e" : "#ef4444" }}>
+                      {period} {er >= 0 ? "+" : ""}{er}%
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           );
         })
       )}
+      {/* 포지션 목록 */}
+      {positions.length > 0 && (
+        <div style={{ borderTop: `6px solid var(--color-background-secondary)` }}>
+          <div style={{ padding: "12px 20px 6px", fontSize: 12, fontWeight: 700, color: "var(--color-text-primary)" }}>포지션</div>
+          {positions.map((pos) => {
+            const hasEntry = pos.entry_price > 0;
+            const hasExit = pos.exit_price > 0;
+            const pct = hasEntry && hasExit
+              ? ((pos.exit_price - pos.entry_price) / pos.entry_price * 100)
+              : hasEntry && displayPrice
+              ? ((displayPrice - pos.entry_price) / pos.entry_price * 100)
+              : null;
+            const statusLabel = { open: "진행 중", closed: "종료", tp_hit: "목표 도달", sl_hit: "손절 도달" }[pos.status] || pos.status;
+            const statusColor = { open: "#3b82f6", closed: "#6b7280", tp_hit: "#22c55e", sl_hit: "#ef4444" }[pos.status] || "#6b7280";
+            const entryPLs = (pos.position_lines || []).filter(pl => pl.role === "entry" && pl.line);
+            const entryLineName = entryPLs.length > 0
+              ? entryPLs.map(pl => pl.line.name || (pl.line.signal_type === "loss" ? "지지선" : "저항선")).join(" + ")
+              : "포지션";
+            return (
+              <div key={pos.id} onClick={() => setEditingPosition(pos)} style={{ padding: "10px 20px", borderBottom: B, cursor: "pointer" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-text-primary)" }}>
+                      {entryLineName}
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 600, padding: "1px 8px", borderRadius: 10, background: statusColor + "22", color: statusColor }}>{statusLabel}</span>
+                  </div>
+                  {pct !== null && (
+                    <span style={{ fontSize: 13, fontWeight: 700, color: pct >= 0 ? "#22c55e" : "#ef4444" }}>
+                      {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 10, fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                  {hasEntry && <span>매입 {isDomestic ? Number(pos.entry_price).toLocaleString() : "$" + Number(pos.entry_price).toLocaleString()}</span>}
+                  {pos.tp_price && <span>목표 {isDomestic ? Number(pos.tp_price).toLocaleString() : "$" + Number(pos.tp_price).toLocaleString()}</span>}
+                  {pos.sl_price && <span>손절 {isDomestic ? Number(pos.sl_price).toLocaleString() : "$" + Number(pos.sl_price).toLocaleString()}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div style={{ padding: "12px 20px" }}>
         <button
           onClick={() => { setPendingPoints(null); setShowModal(true); }}
@@ -892,7 +1019,7 @@ export default function ChartDetail() {
                 {isDomestic ? displayPrice.toLocaleString() + "원" : "$" + displayPrice.toLocaleString()}
               </p>
               <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: priceChange >= 0 ? "var(--color-rise)" : "var(--color-fall)" }}>
-                {priceChange >= 0 ? "▲" : "▼"}{Math.abs(priceChange).toLocaleString()} ({priceChange >= 0 ? "+" : ""}{pctChange}%)
+                {priceChange >= 0 ? "▲" : "▼"}{Math.abs(priceChange).toLocaleString()} ({priceChange >= 0 ? "+" : "-"}{pctChange}%)
               </p>
             </div>
           </div>
@@ -917,7 +1044,7 @@ export default function ChartDetail() {
             {isDomestic ? displayPrice.toLocaleString() + "원" : "$" + displayPrice.toLocaleString()}
           </span>
           <span style={{ fontSize: 15, fontWeight: 600, color: priceChange >= 0 ? "var(--color-rise)" : "var(--color-fall)" }}>
-            {priceChange >= 0 ? "▲" : "▼"}{Math.abs(priceChange).toLocaleString()} ({priceChange >= 0 ? "+" : ""}{pctChange}%)
+            {priceChange >= 0 ? "▲" : "▼"}{Math.abs(priceChange).toLocaleString()} ({priceChange >= 0 ? "+" : "-"}{pctChange}%)
           </span>
         </div>
       )}
@@ -1007,21 +1134,50 @@ export default function ChartDetail() {
           )}
         </div>
         <div style={{ width: 1, background: B, flexShrink: 0, margin: "2px 4px" }} />
-        {MA_CONFIG.map(({ key, label, color }) => (
+        <div ref={(el) => { if (el) el.__maBtn = el; }} style={{ position: "relative" }}>
           <button
-            key={key}
-            onClick={() => { setShowMA((prev) => ({ ...prev, [key]: !prev[key] })); setShowIchimoku(false); }}
+            onClick={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setShowMADropdown((v) => v ? false : { top: rect.bottom + 4, left: rect.left }); }}
             style={{
-              flexShrink: 0, padding: "6px 12px", fontSize: 12, borderRadius: 20, border: B,
-              fontWeight: showMA[key] ? 600 : 400,
-              background: showMA[key] ? color + "22" : "transparent",
-              color: showMA[key] ? color : "var(--color-text-tertiary)",
-              cursor: "pointer",
+              padding: "6px 14px", fontSize: 13, borderRadius: 20, border: B,
+              fontWeight: Object.values(showMA).some(Boolean) ? 600 : 400,
+              background: Object.values(showMA).some(Boolean) ? "var(--btn-active-bg)" : "transparent",
+              color: Object.values(showMA).some(Boolean) ? "var(--btn-active-text)" : "var(--color-text-secondary)",
+              cursor: "pointer", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap",
             }}
           >
-            {label}
+            {(() => { const active = MA_CONFIG.filter(({ key }) => showMA[key]); return active.length > 0 ? active.map(({ label }) => label).join("/") : "이동평균선"; })()}
+            <span style={{ fontSize: 10, lineHeight: 1 }}>▾</span>
           </button>
-        ))}
+          {showMADropdown && (
+            <>
+              <div onClick={() => setShowMADropdown(false)} style={{ position: "fixed", inset: 0, zIndex: 999 }} />
+              <div style={{
+                position: "fixed", top: showMADropdown.top, left: showMADropdown.left, zIndex: 1000,
+                background: "var(--color-background-primary)", border: B,
+                borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                overflow: "hidden", minWidth: 120,
+              }}>
+                {MA_CONFIG.map(({ key, label, color }) => (
+                  <button
+                    key={key}
+                    onClick={() => { setShowMA((prev) => ({ ...prev, [key]: !prev[key] })); setShowIchimoku(false); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 14px", fontSize: 13,
+                      border: "none", borderBottom: `1px solid var(--color-background-secondary)`,
+                      background: showMA[key] ? "var(--color-background-secondary)" : "transparent",
+                      color: showMA[key] ? color : "var(--color-text-secondary)",
+                      fontWeight: showMA[key] ? 600 : 400,
+                      cursor: "pointer", textAlign: "left",
+                    }}
+                  >
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, opacity: showMA[key] ? 1 : 0.3 }} />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         {isDomestic && (
           <>
             <div style={{ width: 1, background: B, flexShrink: 0, margin: "2px 4px" }} />
@@ -1038,7 +1194,7 @@ export default function ChartDetail() {
                 fontWeight: showIchimoku ? 600 : 400,
                 background: showIchimoku ? "rgba(171,71,188,0.15)" : "transparent",
                 color: showIchimoku ? "#ab47bc" : "var(--color-text-tertiary)",
-                cursor: "pointer",
+                cursor: "pointer", whiteSpace: "nowrap",
               }}
             >
               일목균형표
@@ -1050,11 +1206,38 @@ export default function ChartDetail() {
                 fontWeight: showOrderbookLines ? 600 : 400,
                 background: showOrderbookLines ? "rgba(91, 141, 239, 0.15)" : "transparent",
                 color: showOrderbookLines ? "#5b8def" : "var(--color-text-tertiary)",
-                cursor: "pointer",
+                cursor: "pointer", whiteSpace: "nowrap",
               }}
             >
               호가 지지/저항
             </button>
+            <span
+              onClick={(e) => { e.stopPropagation(); setShowObTooltip((v) => !v); }}
+              style={{
+                width: 18, height: 18, borderRadius: "50%", fontSize: 11, fontWeight: 700,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                background: "var(--color-background-tertiary)", color: "var(--color-text-tertiary)",
+                cursor: "pointer", flexShrink: 0, userSelect: "none",
+              }}
+            >?</span>
+            {showObTooltip && (
+              <>
+                <div onClick={() => setShowObTooltip(false)} style={{ position: "fixed", inset: 0, zIndex: 999 }} />
+                <div
+                  style={{
+                    position: "fixed", top: 60, right: 20, left: 20, zIndex: 1000,
+                    maxWidth: 300, margin: "0 auto",
+                    background: "var(--color-background-primary)", border: B,
+                    borderRadius: 12, padding: "14px 18px",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+                    fontSize: 13, lineHeight: 1.7, color: "var(--color-text-secondary)",
+                  }}
+                >
+                  호가창에서 평균 대비 3배 이상 물량이 쌓인 가격대를 차트에 표시합니다. 해당 가격에서 매수/매도 벽이 형성되어 가격 반전이 일어날 수 있는 구간입니다.
+                  <div onClick={() => setShowObTooltip(false)} style={{ marginTop: 10, textAlign: "right", fontSize: 12, color: "var(--color-text-tertiary)", cursor: "pointer" }}>닫기</div>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -1123,6 +1306,9 @@ export default function ChartDetail() {
               <div style={{ background: "var(--color-background-primary)", borderRadius: 12, border: B, overflow: "hidden" }}>
                 <div style={{ padding: "12px 20px", borderBottom: B }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>호가</span>
+                  <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
+                    매수/매도 대기 물량을 보여줍니다. 물량이 큰 가격대는 지지·저항 역할을 할 수 있습니다.
+                  </p>
                 </div>
                 <OrderbookPanel
                   market={market}
@@ -1146,6 +1332,9 @@ export default function ChartDetail() {
           <div style={{ background: "var(--color-background-primary)", borderRadius: 12, border: B, overflow: "hidden" }}>
             <div style={{ padding: "12px 20px", borderBottom: B }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>기술적 분석</span>
+              <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
+                이동평균선, RSI, MACD 등 기술적 지표를 종합 분석하여 현재 매수·매도 신호를 보여줍니다. 각 카드를 탭하면 상세 분석을 확인할 수 있습니다.
+              </p>
             </div>
             <IndicatorPanel code={code} market={market} timeframe={timeframe} />
           </div>
@@ -1244,25 +1433,40 @@ export default function ChartDetail() {
           <div style={{ background: "var(--color-background-primary)" }}>
             {mobileTab === "lines" && renderLineList()}
             {mobileTab === "orderbook" && (
-              <OrderbookPanel
-                market={market}
-                code={code}
-                onSaveSupportResistance={handleSaveOrderbookSR}
-              />
+              <>
+                <p style={{ margin: 0, padding: "10px 20px 0", fontSize: 11, color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
+                  매수/매도 대기 물량을 보여줍니다. 물량이 큰 가격대는 지지·저항 역할을 할 수 있습니다.
+                </p>
+                <OrderbookPanel
+                  market={market}
+                  code={code}
+                  onSaveSupportResistance={handleSaveOrderbookSR}
+                />
+              </>
             )}
             {mobileTab === "investor" && (
               <InvestorPanel market={market} code={code} />
             )}
             {mobileTab === "detect" && (
-              <AutoDetectPanel
-                market={market}
-                code={code}
-                timeframe={timeframe}
-                onPointsSelected={handleDetectPoints}
-              />
+              <>
+                <p style={{ margin: 0, padding: "10px 20px 0", fontSize: 11, color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
+                  과거 차트에서 가격이 반복적으로 멈추거나 반등한 가격대를 자동으로 찾아줍니다. 선을 저장하면 해당 가격 도달 시 알림을 받을 수 있습니다.
+                </p>
+                <AutoDetectPanel
+                  market={market}
+                  code={code}
+                  timeframe={timeframe}
+                  onPointsSelected={handleDetectPoints}
+                />
+              </>
             )}
             {mobileTab === "indicator" && (
-              <IndicatorPanel code={code} market={market} timeframe={timeframe} />
+              <>
+                <p style={{ margin: 0, padding: "10px 20px 0", fontSize: 11, color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
+                  이동평균선, RSI, MACD 등 기술적 지표를 종합 분석하여 현재 매수·매도 신호를 보여줍니다. 각 카드를 탭하면 상세 분석을 확인할 수 있습니다.
+                </p>
+                <IndicatorPanel code={code} market={market} timeframe={timeframe} />
+              </>
             )}
           </div>
         </>
@@ -1275,6 +1479,23 @@ export default function ChartDetail() {
           onClose={() => setEditingLine(null)}
           onSave={handleUpdateLine}
           currentPrice={displayPrice || null}
+          positions={positions}
+          stockCode={code}
+          userId={user?.id}
+          onPositionChanged={loadPositions}
+        />
+      )}
+
+      {/* 포지션 모달 */}
+      {editingPosition !== null && editingPosition?.id && (
+        <PositionModal
+          position={editingPosition}
+          lines={lines}
+          stockCode={code}
+          userId={user?.id}
+          currentPrice={displayPrice || null}
+          onClose={() => setEditingPosition(null)}
+          onSaved={loadPositions}
         />
       )}
 
@@ -1288,6 +1509,10 @@ export default function ChartDetail() {
           currentPrice={displayPrice || null}
           pendingPoints={pendingPoints}
           onUpdatePoints={setPendingPoints}
+          positions={positions}
+          stockCode={code}
+          userId={user?.id}
+          onPositionChanged={loadPositions}
         />
       )}
     </div>

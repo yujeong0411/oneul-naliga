@@ -112,8 +112,8 @@ async def _refresh_all_rankings():
                 data = await kiwoom.get_ranking(rt)
                 _ranking_cache[rt] = data
             except Exception as e:
-                print(f"[ranking] {rt} 백그라운드 갱신 실패: {e}")
-            await asyncio.sleep(0.5)  # 호출 간 간격 (초당 2건)
+                print(f"[ranking] {rt} 백그라운드 갱신 실패: {type(e).__name__}: {e}")
+            await asyncio.sleep(0.5)
         await asyncio.sleep(30)
 
 
@@ -122,7 +122,6 @@ async def get_ranking(type: str = Query(default="view")):
     """인기종목 랭킹 조회 — 캐시 즉시 반환"""
     if type in _ranking_cache:
         return _ranking_cache[type]
-    # 캐시 없으면 직접 호출 (서버 시작 직후)
     try:
         data = await kiwoom.get_ranking(type)
         _ranking_cache[type] = data
@@ -185,11 +184,10 @@ async def get_fx():
 
     # Fallback: open.er-api.com
     try:
-        from app.services.http_client import get_client
-        client = get_client()
-        r = await client.get("https://open.er-api.com/v6/latest/USD")
-        r.raise_for_status()
-        data = r.json()
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get("https://open.er-api.com/v6/latest/USD")
+            r.raise_for_status()
+            data = r.json()
 
         rates = data.get("rates", {})
         krw = rates.get("KRW", 1)
@@ -525,31 +523,78 @@ async def get_ichimoku_chart(body: IndicatorRequest):
             "chikou": [],  # 후행스팬: 현재 종가를 26봉 전에 표시
         }
 
-        # 선행스팬 A/B: ichi_df에 현재까지, span_df에 미래 26봉
+        # 선행스팬 A/B: 26봉 앞으로 시프트 + 미래 구름
         if span_a_col and span_b_col:
-            span_a_current = series_to_list(ichi_df[span_a_col[0]], dates)
-            span_b_current = series_to_list(ichi_df[span_b_col[0]], dates)
+            from datetime import datetime, timedelta
 
-            # 미래 구름 (span_df)
+            # 캔들 간격 추정 (분봉 vs 일봉)
+            is_minute = len(dates[0]) > 8  # 분봉: "20260327093000"
+            if is_minute and len(dates) >= 2:
+                # 분봉 간격 계산
+                d1 = datetime.strptime(dates[-2][:12], "%Y%m%d%H%M")
+                d2 = datetime.strptime(dates[-1][:12], "%Y%m%d%H%M")
+                interval = d2 - d1
+            else:
+                interval = timedelta(days=1)
+                if ct == "W":
+                    interval = timedelta(days=7)
+                elif ct == "M":
+                    interval = timedelta(days=30)
+
+            # 선행스팬은 26봉 앞으로 시프트
+            def shifted_dates(offset=26):
+                """dates 배열에서 offset만큼 앞으로 시프트된 날짜 배열 생성"""
+                result = []
+                for i in range(len(dates)):
+                    future_idx = i + offset
+                    if future_idx < len(dates):
+                        result.append(dates[future_idx])
+                    else:
+                        # 미래 날짜 생성
+                        overshoot = future_idx - len(dates) + 1
+                        if is_minute:
+                            base = datetime.strptime(dates[-1][:12], "%Y%m%d%H%M")
+                            fd = base + interval * overshoot
+                            result.append(fd.strftime("%Y%m%d%H%M") + "00")
+                        else:
+                            base = datetime.strptime(dates[-1][:8], "%Y%m%d")
+                            fd = base + interval * overshoot
+                            result.append(fd.strftime("%Y%m%d"))
+                return result
+
+            shifted = shifted_dates(26)
+
+            span_a_current = []
+            span_b_current = []
+            sa_series = ichi_df[span_a_col[0]]
+            sb_series = ichi_df[span_b_col[0]]
+            for i in range(len(sa_series)):
+                a_v = sa_series.iloc[i]
+                b_v = sb_series.iloc[i]
+                if pd.notna(a_v) and pd.notna(b_v) and i < len(shifted):
+                    span_a_current.append({"date": shifted[i], "value": round(float(a_v))})
+                    span_b_current.append({"date": shifted[i], "value": round(float(b_v))})
+
+            # 미래 구름 (span_df) - 이미 26봉 이후 데이터
             if span_df is not None:
                 future_a_col = [c for c in span_df.columns if c.startswith("ISA_")]
                 future_b_col = [c for c in span_df.columns if c.startswith("ISB_")]
                 if future_a_col and future_b_col:
-                    # 미래 날짜 추정 (마지막 캔들 간격 기준)
-                    if len(dates) >= 2:
-                        last_date = dates[-1]
-                        # 날짜 간격 추정 (일봉 기준 1일)
-                        for fi in range(len(span_df)):
-                            a_v = span_df[future_a_col[0]].iloc[fi]
-                            b_v = span_df[future_b_col[0]].iloc[fi]
-                            if pd.notna(a_v) and pd.notna(b_v):
-                                # 미래 날짜 생성
-                                from datetime import datetime, timedelta
-                                base = datetime.strptime(last_date[:8], "%Y%m%d")
-                                future_date = base + timedelta(days=fi + 1)
-                                fd = future_date.strftime("%Y%m%d")
-                                span_a_current.append({"date": fd, "value": round(float(a_v))})
-                                span_b_current.append({"date": fd, "value": round(float(b_v))})
+                    for fi in range(len(span_df)):
+                        a_v = span_df[future_a_col[0]].iloc[fi]
+                        b_v = span_df[future_b_col[0]].iloc[fi]
+                        if pd.notna(a_v) and pd.notna(b_v):
+                            overshoot = len(dates) + fi - len(dates) + 26 + 1
+                            if is_minute:
+                                base = datetime.strptime(dates[-1][:12], "%Y%m%d%H%M")
+                                fd = base + interval * (fi + 27)
+                                fd_str = fd.strftime("%Y%m%d%H%M") + "00"
+                            else:
+                                base = datetime.strptime(dates[-1][:8], "%Y%m%d")
+                                fd = base + interval * (fi + 27)
+                                fd_str = fd.strftime("%Y%m%d")
+                            span_a_current.append({"date": fd_str, "value": round(float(a_v))})
+                            span_b_current.append({"date": fd_str, "value": round(float(b_v))})
 
             data["senkou_a"] = span_a_current
             data["senkou_b"] = span_b_current

@@ -1,6 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL || "";
 
-const DEFAULT_QUERIES = ["미국증시", "주식시장", "코스피"];
+const DEFAULT_QUERIES = ["코스피"];
 const STORAGE_KEY = "news_keywords";
 
 export const loadKeywords = () => {

@@ -259,7 +259,7 @@ function TopNav() {
           관심종목
         </button>
 
-        {NAV.map((item) => {
+        {NAV.filter((item) => item.id !== "home" && item.id !== "settings").map((item) => {
           const active = location.pathname === item.path;
           const isAlert = item.id === "alert";
           return (

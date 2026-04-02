@@ -27,16 +27,14 @@ async def _fetch_naver(query: str, display: int = 5) -> list[dict]:
         "X-Naver-Client-Id": settings.naver_client_id,
         "X-Naver-Client-Secret": settings.naver_client_secret,
     }
-    from app.services.http_client import get_client
-    client = get_client()
-    resp = await client.get(
-        "https://openapi.naver.com/v1/search/news.json",
-        timeout=5.0,
-        headers=headers,
-        params={"query": query, "display": display, "sort": "date"},
-    )
-    resp.raise_for_status()
-    items = resp.json().get("items", [])
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        resp = await client.get(
+            "https://openapi.naver.com/v1/search/news.json",
+            headers=headers,
+            params={"query": query, "display": display, "sort": "date"},
+        )
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
     return [
         {
             "title": _clean(item["title"]),
@@ -54,16 +52,13 @@ async def _fetch_google(query: str, display: int = 5) -> list[dict]:
         f"?q={httpx.URL('', params={'q': query}).params['q']}"
         f"&hl=ko&gl=KR&ceid=KR:ko"
     )
-    from app.services.http_client import get_client
-    client = get_client()
-    resp = await client.get(
-        "https://news.google.com/rss/search",
-        timeout=8.0,
-        headers={"User-Agent": "Mozilla/5.0"},
-        params={"q": query, "hl": "ko", "gl": "KR", "ceid": "KR:ko"},
-        follow_redirects=True,
-    )
-    resp.raise_for_status()
+    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True,
+                                  headers={"User-Agent": "Mozilla/5.0"}) as client:
+        resp = await client.get(
+            "https://news.google.com/rss/search",
+            params={"q": query, "hl": "ko", "gl": "KR", "ceid": "KR:ko"},
+        )
+        resp.raise_for_status()
 
     root = ET.fromstring(resp.text)
     items = root.findall("./channel/item")[:display]

@@ -9,10 +9,10 @@ if sys.platform == "win32":
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import stocks, lines, alerts, news
+from app.routers import stocks, lines, alerts, news, positions
 from app.routers.stocks import _refresh_all_rankings
 from app.services.http_client import close_client
-from app.services.monitor import realtime_monitor, daily_monitor
+from app.services.monitor import realtime_monitor, daily_monitor, touch_result_judge
 from app.services.kiwoom_ws import stream_prices, stream_orderbook
 from app.services.kis_ws import stream_us_prices, stream_us_orderbook
 from app.services.indicator_ws import get_or_create_session, cleanup_empty_sessions
@@ -24,13 +24,15 @@ async def lifespan(app: FastAPI):
     t1 = asyncio.create_task(realtime_monitor())  # 분봉용 WebSocket
     t2 = asyncio.create_task(daily_monitor())     # 일봉/주봉/월봉용 (장 마감 후 1회)
     t3 = asyncio.create_task(_refresh_all_rankings())  # 랭킹 30초 주기 갱신
+    t4 = asyncio.create_task(touch_result_judge())  # 터치 결과 판정 (1분 주기)
 
     yield
 
     t1.cancel()
     t2.cancel()
     t3.cancel()
-    await asyncio.gather(t1, t2, t3, return_exceptions=True)
+    t4.cancel()
+    await asyncio.gather(t1, t2, t3, t4, return_exceptions=True)
     await close_client()
 
 
@@ -51,6 +53,7 @@ app.include_router(stocks.router, prefix="/api")
 app.include_router(lines.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(news.router, prefix="/api")
+app.include_router(positions.router, prefix="/api")
 
 
 @app.get("/health")
@@ -73,7 +76,7 @@ async def ws_prices(websocket: WebSocket, codes: str = ""):
         await websocket.close()
         return
 
-    async def on_price(code: str, price: float, change_pct: str):
+    async def on_price(code: str, price: float, change_pct: str, **kwargs):
         try:
             await websocket.send_text(json.dumps({
                 "code": code,
@@ -184,7 +187,7 @@ async def ws_us_prices(websocket: WebSocket, codes: str = ""):
         await websocket.close()
         return
 
-    async def on_price(symbol: str, price: float, change_pct: str):
+    async def on_price(symbol: str, price: float, change_pct: str, **kwargs):
         try:
             await websocket.send_text(json.dumps({
                 "code": symbol,

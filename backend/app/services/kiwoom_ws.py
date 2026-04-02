@@ -224,15 +224,16 @@ _manager = KiwoomWSManager()
 async def stream_prices(stock_codes: list[str], on_price, real_type: str = "0B"):
     """
     실시간 가격 스트리밍.
-    on_price: async callable(code: str, price: float, change_pct: str)
+    on_price: async callable(code: str, price: float, change_pct: str, volume: int)
     """
     registered = []
     for code in stock_codes:
         async def on_values(c, values, _cb=on_price):
             price = _parse_price(values.get("10", "0"))
             change = values.get("12", "0.00")
+            volume = int(values.get("13", "0") or "0")
             if price:
-                await _cb(c, price, change)
+                await _cb(c, price, change, volume=volume)
 
         await _manager.subscribe(code, "0B", on_values)
         registered.append((code, on_values))
