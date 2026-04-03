@@ -165,23 +165,27 @@ async def check_and_alert(line: dict, current_price: float, volume: int = 0) -> 
     if recent:
         return
 
-    signal_label = "저항선" if line.get("signal_type") == "attack" else "지지선"
     stock_code = line["stock_code"]
     is_domestic = stock_code.isdigit() and len(stock_code) == 6
     price_fmt = f"{current_price:,.0f}원" if is_domestic else f"${current_price:,.2f}"
 
+    intent = line.get("intent") or "watch"
+    intent_labels = {"buy": "매수 타점", "sell": "매도 타점", "stop": "손절 라인", "watch": "감시 가격"}
+    intent_label = intent_labels.get(intent, "감시 가격")
+
     user_id = line.get("user_id")
     await push.broadcast(
         user_id=user_id,
-        title=f"[{stock_code}] {signal_label} 도달",
+        title=f"[{stock_code}] {intent_label} 도달",
         body=f"현재가 {price_fmt} · 거리 {diff_pct:.2f}%",
-        data={"stock_code": stock_code, "signal_type": line.get("signal_type")},
+        data={"stock_code": stock_code, "intent": intent},
     )
 
     await asyncio.to_thread(lambda: db.table("alerts").insert({
         "stock_code":    stock_code,
         "line_id":       line["id"],
         "signal_type":   line["signal_type"],
+        "intent":        intent,
         "current_price": current_price,
         "target_price":  target,
         "distance_pct":  diff_pct,

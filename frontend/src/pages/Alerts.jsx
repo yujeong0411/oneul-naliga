@@ -23,7 +23,7 @@ export default function Alerts() {
   const refreshAlertCount = useAlertRefresh();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all"); // "all" | "attack" | "loss"
+  const [filter, setFilter] = useState("all"); // "all" | "buy" | "sell" | "stop" | "watch"
 
   useEffect(() => {
     getAlerts(null, 200, user?.id)
@@ -44,7 +44,7 @@ export default function Alerts() {
     refreshAlertCount();
   };
 
-  const filtered = filter === "all" ? alerts : alerts.filter((a) => a.signal_type === filter);
+  const filtered = filter === "all" ? alerts : alerts.filter((a) => (a.intent || "watch") === filter);
 
   // 날짜별 그룹
   const grouped = {};
@@ -78,8 +78,10 @@ export default function Alerts() {
         <div style={{ display: "flex", gap: 6 }}>
           {[
             { key: "all", label: "전체" },
-            { key: "attack", label: "저항선" },
-            { key: "loss", label: "지지선" },
+            { key: "buy", label: "매수" },
+            { key: "sell", label: "매도" },
+            { key: "stop", label: "손절" },
+            { key: "watch", label: "감시" },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -138,7 +140,14 @@ export default function Alerts() {
               {/* 카드 */}
               <div style={{ background: "var(--color-background-primary)", borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow-card)" }}>
                 {items.map((alert, i) => {
-                  const isAttack = alert.signal_type === "attack";
+                  const intent = alert.intent || "watch";
+                  const intentConfig = {
+                    buy:   { label: "매수 타점", bg: "var(--color-background-success)", color: "var(--color-text-success)", icon: <path d="M12 19V5M5 12l7-7 7 7" /> },
+                    sell:  { label: "매도 타점", bg: "var(--color-background-danger)", color: "var(--color-text-danger)", icon: <path d="M12 5v14M19 12l-7 7-7-7" /> },
+                    stop:  { label: "손절 경고", bg: "var(--color-background-warning)", color: "var(--color-text-warning)", icon: <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01" /> },
+                    watch: { label: "감시 도달", bg: "var(--color-background-tertiary)", color: "var(--color-text-secondary)", icon: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></> },
+                  };
+                  const cfg = intentConfig[intent] || intentConfig.watch;
                   const isDomestic = /^\d{6}$/.test(alert.stock_code);
                   const fmt = (p) => isDomestic ? p?.toLocaleString() + "원" : "$" + p?.toLocaleString();
 
@@ -151,16 +160,13 @@ export default function Alerts() {
                       {/* 아이콘 */}
                       <div style={{
                         width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-                        background: isAttack ? "var(--color-background-success)" : "var(--color-background-danger)",
+                        background: cfg.bg,
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                          stroke={isAttack ? "var(--color-text-success)" : "var(--color-text-danger)"}
+                          stroke={cfg.color}
                           strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          {isAttack
-                            ? <path d="M7 17l9.2-9.2M17 17V7H7" />
-                            : <path d="M17 7l-9.2 9.2M7 7v10h10" />
-                          }
+                          {cfg.icon}
                         </svg>
                       </div>
 
@@ -172,10 +178,10 @@ export default function Alerts() {
                           </span>
                           <span style={{
                             fontSize: 10, padding: "2px 8px", borderRadius: 20, fontWeight: 600,
-                            background: isAttack ? "var(--color-background-success)" : "var(--color-background-danger)",
-                            color: isAttack ? "var(--color-text-success)" : "var(--color-text-danger)",
+                            background: cfg.bg,
+                            color: cfg.color,
                           }}>
-                            {isAttack ? "저항선" : "지지선"}
+                            {cfg.label}
                           </span>
                         </div>
 

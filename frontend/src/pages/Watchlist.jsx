@@ -154,12 +154,10 @@ export default function Watchlist() {
     const changeAmtMeta = priceData?.change_amt ?? null;
     let nearest = null;
     if (price && lines.length > 0) {
-      const withDist = lines
-        .filter((l) => l.line_type === "horizontal" && l.price)
-        .map((l) => ({ ...l, dist: ((price - l.price) / l.price) * 100 }));
-      if (withDist.length > 0) {
-        const closest = withDist.reduce((a, b) => Math.abs(a.dist) < Math.abs(b.dist) ? a : b);
-        nearest = { type: closest.signal_type === "loss" ? "지지선" : "저항선", dist: Number(closest.dist.toFixed(2)) };
+      const avgLine = lines.find((l) => l.line_type === "horizontal" && l.price && l.name === "평단가");
+      if (avgLine) {
+        const dist = ((price - avgLine.price) / avgLine.price) * 100;
+        nearest = { type: "평단가", dist: Number(dist.toFixed(2)) };
       }
     }
     setStockMeta((prev) => ({ ...prev, [code]: { price, change_pct: changePctMeta, change_amt: changeAmtMeta, lineCount: lines.length, nearest } }));
@@ -255,7 +253,7 @@ export default function Watchlist() {
                 {nearest && (
                   <div style={{ textAlign: "right", minWidth: 52 }}>
                     <p style={{ margin: "0 0 2px", fontSize: 10, color: "var(--color-text-tertiary)" }}>{nearest.type}</p>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: Math.abs(nearest.dist) < 1 ? "var(--color-text-danger)" : nearest.dist < 0 ? "var(--color-text-success)" : "var(--color-text-warning)" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: nearest.dist >= 0 ? "var(--color-text-danger)" : "var(--color-text-info)" }}>
                       {nearest.dist > 0 ? "+" : ""}{nearest.dist}%
                     </span>
                   </div>

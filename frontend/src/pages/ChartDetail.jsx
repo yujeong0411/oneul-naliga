@@ -998,7 +998,7 @@ export default function ChartDetail() {
       }}>
         <div style={{ height: 54, padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button onClick={() => navigate("/")} style={{ border: "none", background: "none", cursor: "pointer", padding: "4px 0", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>←</button>
+            <button onClick={() => navigate(-1)} style={{ border: "none", background: "none", cursor: "pointer", padding: "4px 0", fontSize: 20, color: "var(--color-text-secondary)", lineHeight: 1 }}>←</button>
             <div>
               <span style={{ fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>{stockName || code}</span>
               {stockName && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--color-text-tertiary)" }}>{code}</span>}
