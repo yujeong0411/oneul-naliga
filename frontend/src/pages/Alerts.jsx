@@ -188,7 +188,7 @@ export default function Alerts() {
                         <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--color-text-secondary)" }}>
                           <span>현재가 <b style={{ color: "var(--color-text-primary)" }}>{fmt(alert.current_price)}</b></span>
                           <span>거리 <b style={{
-                            color: isAttack ? "var(--color-text-success)" : "var(--color-text-danger)",
+                            color: cfg.color,
                           }}>{alert.distance_pct?.toFixed(2)}%</b></span>
                         </div>
 
