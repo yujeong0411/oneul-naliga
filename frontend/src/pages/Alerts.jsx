@@ -3,14 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { getAlerts, deleteAlert } from "../api/alerts";
 import { useAuth } from "../context/AuthContext";
 import { useAlertRefresh } from "../hooks/useAlertCount.jsx";
-
-function timeAgo(isoStr) {
-  const diff = (Date.now() - new Date(isoStr)) / 1000;
-  if (diff < 60)    return "방금";
-  if (diff < 3600)  return `${Math.floor(diff / 60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-  return `${Math.floor(diff / 86400)}일 전`;
-}
+import { useStockNames } from "../hooks/useStockNames";
+import { timeAgo } from "../utils/time";
 
 function formatDate(isoStr) {
   const d = new Date(isoStr);
@@ -22,12 +16,21 @@ export default function Alerts() {
   const { user } = useAuth();
   const refreshAlertCount = useAlertRefresh();
   const [alerts, setAlerts] = useState([]);
+  const [alertCodes, setAlertCodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // "all" | "buy" | "sell" | "stop" | "watch"
 
+  const { nameMap } = useStockNames(user?.id, alertCodes);
+
   useEffect(() => {
     getAlerts(null, 200, user?.id)
-      .then((data) => setAlerts(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const arr = Array.isArray(data) ? data : [];
+        setAlerts(arr);
+        setAlertCodes([...new Set(arr.map((a) => a.stock_code))]);
+        localStorage.setItem("alerts_last_seen", String(Date.now()));
+        refreshAlertCount();
+      })
       .catch(() => setAlerts([]))
       .finally(() => setLoading(false));
   }, [user?.id]);
@@ -174,7 +177,7 @@ export default function Alerts() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                           <span style={{ fontSize: 14, fontWeight: 700, color: "var(--color-text-primary)" }}>
-                            {alert.stock_code}
+                            {nameMap[alert.stock_code] || alert.stock_code}
                           </span>
                           <span style={{
                             fontSize: 10, padding: "2px 8px", borderRadius: 20, fontWeight: 600,

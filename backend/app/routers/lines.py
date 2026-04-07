@@ -24,6 +24,21 @@ async def create_line(line: LineCreate):
     return result.data[0]
 
 
+@router.get("/")
+async def get_all_lines(user_id: str = Query(...)):
+    """유저의 전체 선 조회 (종목 무관)"""
+    db = get_supabase()
+    return (
+        db.table("lines")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("is_active", True)
+        .order("created_at", desc=True)
+        .execute()
+        .data
+    )
+
+
 @router.get("/{stock_code}")
 async def get_lines(stock_code: str, user_id: Optional[str] = Query(default=None)):
     """특정 종목의 모든 선 조회"""

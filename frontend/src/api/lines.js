@@ -6,6 +6,9 @@ export const getLines = (stockCode, userId) => {
   return fetch(`${BASE}/lines/${stockCode}${params}`).then((r) => r.json());
 };
 
+export const getAllLines = (userId) =>
+  fetch(`${BASE}/lines/?user_id=${userId}`).then((r) => r.json());
+
 export const createLine = (body) =>
   fetch(`${BASE}/lines/`, {
     method: "POST",
