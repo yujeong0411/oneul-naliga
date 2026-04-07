@@ -10,6 +10,7 @@ import DomesticIndexDetail from "./pages/DomesticIndexDetail";
 import Alerts from "./pages/Alerts";
 import Settings from "./pages/Settings";
 import Watchlist from "./pages/Watchlist";
+import MyLines from "./pages/MyLines";
 import SplashScreen from "./components/SplashScreen";
 import WhatsNewModal, { shouldShowWhatsNew } from "./components/WhatsNewModal";
 import { useAlertCount, AlertCountProvider } from "./hooks/useAlertCount.jsx";
@@ -320,6 +321,7 @@ function AppLayout() {
           <Route path="/domestic/:id"     element={<DomesticIndexDetail />} />
           <Route path="/watchlist"     element={<Watchlist />} />
           <Route path="/alerts"        element={<Alerts />} />
+          <Route path="/my-lines"     element={<MyLines />} />
           <Route path="/settings"      element={<Settings />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
         </Routes>

@@ -16,8 +16,8 @@ export function AlertCountProvider({ children }) {
       .then((r) => r.json())
       .then((data) => {
         if (!Array.isArray(data)) return;
-        const since = Date.now() - 24 * 60 * 60 * 1000;
-        const recent = data.filter((a) => new Date(a.created_at).getTime() > since);
+        const lastSeen = parseInt(localStorage.getItem("alerts_last_seen") || "0", 10);
+        const recent = data.filter((a) => new Date(a.created_at).getTime() > lastSeen);
         setCount(recent.length);
       })
       .catch(() => {});

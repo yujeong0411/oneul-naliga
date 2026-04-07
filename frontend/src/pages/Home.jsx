@@ -1,6 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { getNews, loadKeywords, saveKeywords } from "../api/news";
+import { getPrice } from "../api/stocks";
+import { useLivePrices } from "../hooks/useLivePrice";
+import { getAllLines } from "../api/lines";
+import { getPositions } from "../api/positions";
+import { getAlerts } from "../api/alerts";
+import { useStockNames } from "../hooks/useStockNames";
+import { timeAgo } from "../utils/time";
 
 function useBreakpoint() {
   const get = () => window.innerWidth < 768 ? "mobile" : window.innerWidth < 1100 ? "tablet" : "pc";
@@ -233,6 +240,222 @@ function PopularSection({ isMobile, isPC, navigate, onMaintenance }) {
   );
 }
 
+// ── 관심종목 미니 프리뷰 ────────────────────────────────────────────
+function WatchlistPreview({ user, isMobile, isPC, navigate }) {
+  const { watchlist, ready } = useStockNames(user?.id);
+  const [restPrices, setRestPrices] = useState({});
+
+  const domesticCodes = useMemo(
+    () => watchlist.filter((s) => /^\d{6}$/.test(s.code)).map((s) => s.code),
+    [watchlist],
+  );
+  const livePrices = useLivePrices(domesticCodes);
+
+  // REST fallback for all stocks
+  useEffect(() => {
+    if (watchlist.length === 0) return;
+    watchlist.forEach((s) => {
+      const isDomestic = /^\d{6}$/.test(s.code);
+      const market = isDomestic ? "KOSPI" : "US";
+      const exchange = isDomestic ? undefined : (s.exchange || "NAS");
+      getPrice(market, s.code, exchange)
+        .then((res) => {
+          setRestPrices((prev) => ({ ...prev, [s.code]: res }));
+        })
+        .catch(() => {});
+    });
+  }, [watchlist]);
+
+  if (!user || !ready || watchlist.length === 0) return null;
+
+  const pad = isMobile ? "0 20px" : isPC ? "0" : "0 24px";
+
+  return (
+    <section style={{ paddingTop: 20 }}>
+      <div style={{ padding: pad, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <span style={{ fontSize: 17, fontWeight: 800, color: "var(--color-text-primary)", letterSpacing: "-0.4px" }}>관심종목</span>
+        <button
+          onClick={() => navigate("/watchlist")}
+          style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--color-text-secondary)", padding: 0 }}
+        >
+          전체보기 ›
+        </button>
+      </div>
+      <div
+        className="hide-scrollbar"
+        style={{ display: "flex", gap: 8, overflowX: "auto", padding: isMobile ? "0 20px 4px" : isPC ? "0 0 4px" : "0 24px 4px" }}
+      >
+        {watchlist.map((s) => {
+          const isDomestic = /^\d{6}$/.test(s.code);
+          const live = livePrices[s.code];
+          const rest = restPrices[s.code];
+          const price = live?.price ?? rest?.price ?? null;
+          const changePct = live?.change_pct ?? rest?.change_pct ?? null;
+          const pctNum = changePct != null ? parseFloat(changePct) : null;
+          const isUp = pctNum !== null && pctNum >= 0;
+
+          return (
+            <div
+              key={s.code}
+              onClick={() =>
+                navigate(`/chart/${s.code}`, {
+                  state: { name: s.name, market: isDomestic ? "KOSPI" : "US", exchange: s.exchange },
+                })
+              }
+              style={{
+                flexShrink: 0,
+                minWidth: 130,
+                background: "var(--color-background-primary)",
+                borderRadius: 14,
+                padding: "14px 16px",
+                boxShadow: "var(--shadow-card)",
+                cursor: "pointer",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <span
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--color-text-primary)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {s.name}
+                </span>
+                <span
+                  style={{
+                    flexShrink: 0,
+                    padding: "2px 5px",
+                    borderRadius: 4,
+                    fontSize: 9,
+                    fontWeight: 600,
+                    background: isDomestic ? "var(--color-background-success)" : "var(--color-background-info)",
+                    color: isDomestic ? "var(--color-text-success)" : "var(--color-text-info)",
+                  }}
+                >
+                  {isDomestic ? "KR" : "US"}
+                </span>
+              </div>
+              <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 700, color: "var(--color-text-primary)" }}>
+                {price != null
+                  ? isDomestic
+                    ? Number(price).toLocaleString() + "원"
+                    : "$" + Number(price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  : "—"}
+              </p>
+              {pctNum !== null ? (
+                <span style={{ fontSize: 11, fontWeight: 600, color: isUp ? "var(--color-rise)" : "var(--color-fall)" }}>
+                  {isUp ? "+" : ""}{pctNum.toFixed(2)}%
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>&nbsp;</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ── 내 선 현황 ──────────────────────────────────────────────────────
+function MyLinesCard({ user, isMobile, isPC, navigate }) {
+  const [lines, setLines] = useState([]);
+  const [openPositions, setOpenPositions] = useState([]);
+  const [latestAlert, setLatestAlert] = useState(null);
+  const [alertCodes, setAlertCodes] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    Promise.all([
+      getAllLines(user.id).catch(() => []),
+      getPositions(null, user.id).catch(() => []),
+      getAlerts(null, 5, user.id).catch(() => []),
+    ]).then(([l, p, a]) => {
+      setLines(Array.isArray(l) ? l : []);
+      setOpenPositions(Array.isArray(p) ? p.filter((x) => x.status === "open") : []);
+      const alert = Array.isArray(a) && a.length > 0 ? a[0] : null;
+      setLatestAlert(alert);
+      setAlertCodes(alert ? [alert.stock_code] : []);
+      setLoaded(true);
+    });
+  }, [user]);
+
+  const { nameMap } = useStockNames(user?.id, alertCodes);
+
+  if (!user || !loaded) return null;
+  if (lines.length === 0 && openPositions.length === 0) return null;
+
+  const totalLines = lines.length;
+  const horizontalCount = lines.filter((l) => l.line_type === "horizontal").length;
+  const trendCount = lines.filter((l) => l.line_type === "trend").length;
+
+  const pad = isMobile ? "0 20px" : isPC ? "0" : "0 24px";
+
+  return (
+    <section style={{ paddingTop: 20 }}>
+      <div style={{ padding: pad, display: "flex", alignItems: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 17, fontWeight: 800, color: "var(--color-text-primary)", letterSpacing: "-0.4px" }}>내 선 현황</span>
+      </div>
+      <div
+        onClick={() => navigate("/my-lines")}
+        style={{
+          margin: isMobile ? "0 20px" : isPC ? "0" : "0 24px",
+          background: "var(--color-background-primary)",
+          borderRadius: 16,
+          padding: 16,
+          boxShadow: "var(--shadow-card)",
+          cursor: "pointer",
+        }}
+      >
+        {/* 상단: 선 개수 */}
+        <div style={{ display: "flex", textAlign: "center" }}>
+          {[
+            { label: "전체 선", value: totalLines },
+            { label: "수평선", value: horizontalCount },
+            { label: "추세선", value: trendCount },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--color-text-primary)" }}>{value}</p>
+              <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--color-text-tertiary)" }}>{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* 구분선 */}
+        <div style={{ height: 1, background: "var(--color-border-tertiary)", margin: "14px 0" }} />
+
+        {/* 하단: 포지션 + 최근 알림 */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)" }}>
+              {openPositions.length > 0 ? `진행 중인 매매 계획 ${openPositions.length}개` : "진행 중인 매매 계획 없음"}
+            </p>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            {latestAlert ? (
+              <>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>
+                  {nameMap[latestAlert.stock_code] || latestAlert.stock_code} 터치
+                </p>
+                <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--color-text-tertiary)" }}>
+                  {timeAgo(latestAlert.created_at)}
+                </p>
+              </>
+            ) : (
+              <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-tertiary)" }}>최근 알림 없음</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── 메인 컴포넌트 ────────────────────────────────────────────────────
 
 function MaintenanceModal({ errors, onClose }) {
@@ -447,6 +670,12 @@ export default function Home() {
               })}
             </div>
           </section>
+
+          {/* 관심종목 미니 프리뷰 */}
+          <WatchlistPreview user={user} isMobile={isMobile} isPC={isPC} navigate={navigate} />
+
+          {/* 내 선 현황 */}
+          <MyLinesCard user={user} isMobile={isMobile} isPC={isPC} navigate={navigate} />
 
           {/* 인기 종목 */}
           <PopularSection isMobile={isMobile} isPC={isPC} navigate={navigate} onMaintenance={() => { if (!alreadyDismissed) setApiErrors((prev) => prev.includes("kiwoom") ? prev : [...prev, "kiwoom"]); }} />
