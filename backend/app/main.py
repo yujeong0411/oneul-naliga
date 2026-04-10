@@ -9,7 +9,7 @@ if sys.platform == "win32":
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import stocks, lines, alerts, news, positions
+from app.routers import stocks, lines, alerts, news, positions, users
 from app.routers.stocks import _refresh_all_rankings
 from app.services.http_client import close_client
 from app.services.monitor import realtime_monitor, daily_monitor, touch_result_judge
@@ -54,6 +54,7 @@ app.include_router(lines.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(news.router, prefix="/api")
 app.include_router(positions.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
 
 
 @app.get("/health")
