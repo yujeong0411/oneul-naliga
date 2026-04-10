@@ -217,6 +217,18 @@ button {
 .login-btn-wrap {
   margin-top: 40px; width: 320px;
 }
+.login-features {
+  background: rgba(0,0,0,0.06);
+}
+.login-features-icon { stroke: #6b7280; }
+.login-features-text { color: #4b5563; }
+
+[data-theme="dark"] .login-title { color: #f3f4f6; }
+[data-theme="dark"] .login-subtitle { color: #9ca3af; }
+[data-theme="dark"] .login-features { background: rgba(255,255,255,0.07); }
+[data-theme="dark"] .login-features-icon { stroke: rgba(255,255,255,0.55); }
+[data-theme="dark"] .login-features-text { color: rgba(255,255,255,0.75); }
+
 @media (max-width: 767px) {
   .login-title { font-size: 26px; }
   .login-subtitle { font-size: 16px; }

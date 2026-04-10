@@ -48,8 +48,26 @@ function SectionLabel({ label }) {
 export default function Settings() {
   const { user, loginWithKakao, logout } = useAuth();
   const [dark, toggleDark] = useDarkMode();
-  const { supported: pushSupported, subscribed, loading: pushLoading, subscribe, unsubscribe, testPush } = usePushNotification(user?.id);
+  const { supported: pushSupported, subscribed, loading: pushLoading, initializing: pushInit, subscribe, unsubscribe, testPush } = usePushNotification(user?.id);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
+  const API_URL = import.meta.env.VITE_API_URL || "";
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/users/me?user_id=${user.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      await logout();
+    } catch {
+      alert("탈퇴 처리 중 오류가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
 
   const pad = "0 20px";
 
@@ -170,12 +188,12 @@ export default function Settings() {
                 <div onClick={pushLoading ? undefined : (subscribed ? unsubscribe : subscribe)} style={{
                   width: 44, height: 26, borderRadius: 13, cursor: pushLoading ? "default" : "pointer",
                   background: subscribed ? "#3a9e62" : "var(--color-border-secondary)",
-                  position: "relative", transition: "background 0.2s", flexShrink: 0, opacity: pushLoading ? 0.5 : 1,
+                  position: "relative", transition: pushInit ? "none" : "background 0.2s", flexShrink: 0, opacity: pushLoading ? 0.5 : 1,
                 }}>
                   <div style={{
                     position: "absolute", top: 3, left: subscribed ? 21 : 3,
                     width: 20, height: 20, borderRadius: 10,
-                    background: "white", transition: "left 0.2s",
+                    background: "white", transition: pushInit ? "none" : "left 0.2s",
                     boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
                   }} />
                 </div>
@@ -199,7 +217,73 @@ export default function Settings() {
           <Row label="버전" noBorder right={<span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>0.1.0</span>} />
         </Card>
 
+        {/* 계정 */}
+        {user && (
+          <>
+            <SectionLabel label="계정" />
+            <Card>
+              <Row
+                label="회원 탈퇴"
+                sub="모든 데이터가 삭제되며 복구할 수 없습니다"
+                noBorder
+                danger
+                onClick={() => setShowDeleteConfirm(true)}
+                right={<span style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>›</span>}
+              />
+            </Card>
+          </>
+        )}
+
       </div>
+
+      {/* 회원탈퇴 확인 모달 */}
+      {showDeleteConfirm && (
+        <div onClick={() => !deleting && setShowDeleteConfirm(false)} style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.5)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 20,
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: "var(--color-background-primary)",
+            borderRadius: 16, padding: "28px 24px 20px", width: "100%", maxWidth: 320,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+          }}>
+            <p style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 700, color: "var(--color-text-primary)" }}>
+              정말 탈퇴하시겠어요?
+            </p>
+            <p style={{ margin: "0 0 24px", fontSize: 13, color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>
+              저장한 선, 알림 기록, 포지션 등 모든 데이터가 영구 삭제됩니다.
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                style={{
+                  flex: 1, height: 44, borderRadius: 10,
+                  border: "1px solid var(--color-border-primary)",
+                  background: "transparent", color: "var(--color-text-secondary)",
+                  fontSize: 14, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                style={{
+                  flex: 1, height: 44, borderRadius: 10, border: "none",
+                  background: "var(--color-text-danger)", color: "#fff",
+                  fontSize: 14, fontWeight: 700, cursor: deleting ? "default" : "pointer",
+                  opacity: deleting ? 0.6 : 1,
+                }}
+              >
+                {deleting ? "처리 중..." : "탈퇴하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

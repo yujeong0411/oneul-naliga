@@ -13,12 +13,19 @@ export function usePushNotification(userId) {
   const [permission, setPermission] = useState(Notification.permission);
   const [subscribed, setSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
 
   // 현재 구독 상태 확인
   useEffect(() => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setInitializing(false);
+      return;
+    }
     navigator.serviceWorker.ready.then((reg) =>
-      reg.pushManager.getSubscription().then((sub) => setSubscribed(!!sub))
+      reg.pushManager.getSubscription().then((sub) => {
+        setSubscribed(!!sub);
+        requestAnimationFrame(() => setInitializing(false));
+      })
     );
   }, []);
 
@@ -81,5 +88,5 @@ export function usePushNotification(userId) {
 
   const supported = "serviceWorker" in navigator && "PushManager" in window;
 
-  return { supported, permission, subscribed, loading, subscribe, unsubscribe, testPush };
+  return { supported, permission, subscribed, loading, initializing, subscribe, unsubscribe, testPush };
 }

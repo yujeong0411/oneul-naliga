@@ -17,6 +17,36 @@ export default function Login() {
         <h1 className="login-title">오늘 날이가</h1>
         <p className="login-subtitle">오늘 하루도 건승하세요!</p>
 
+        <div className="login-features" style={{
+          display: "flex", flexDirection: "column", gap: 10,
+          margin: "20px 0 16px", padding: "16px 18px",
+          borderRadius: 12, backdropFilter: "blur(6px)",
+        }}>
+          {[
+            { icon: null, replace: true, label: "차트에 지지선·저항선 직접 그리기" },
+            { icon: "M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-4-5.7V5a2 2 0 10-4 0v.3C7.7 6.2 6 8.4 6 11v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9", label: "주가가 선에 닿으면 푸시 알림" },
+            { icon: "M22 12h-4l-3 9L9 3l-3 9H2", label: "터치 반등 확률 자동 계산" },
+          ].map((item, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <svg className="login-features-icon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                {item.replace
+                  ? <>
+                      <line x1="4" y1="20" x2="10" y2="8" />
+                      <line x1="10" y1="8" x2="16" y2="16" />
+                      <line x1="16" y1="16" x2="20" y2="6" />
+                      <line x1="2" y1="14" x2="22" y2="14" strokeDasharray="3 3" />
+                    </>
+                  : <path d={item.icon} />
+                }
+              </svg>
+              <span className="login-features-text" style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.3 }}>
+                {item.label}
+              </span>
+            </div>
+          ))}
+        </div>
+
         <div className="login-btn-wrap" style={{
           opacity: showButton ? 1 : 0,
           transform: showButton ? "translateY(0)" : "translateY(24px)",
